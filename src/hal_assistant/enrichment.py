@@ -21,7 +21,11 @@ def _first(value: object) -> str | None:
 
 
 def _score(publication: Publication, title: str | None, year: int | None) -> float:
-    title_score = SequenceMatcher(None, normalize(publication.title), normalize(title or "")).ratio()
+    title_score = SequenceMatcher(
+        None,
+        normalize(publication.title),
+        normalize(title or ""),
+    ).ratio()
     year_score = 1.0 if publication.year and year == publication.year else 0.0
     return round((title_score * 0.85 + year_score * 0.15) * 100, 1)
 
