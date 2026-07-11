@@ -37,21 +37,34 @@ def _text(root: ET.Element, path: str) -> str | None:
 def _inspect(path: Path) -> dict[str, Any]:
     tree = ET.parse(path)
     root = tree.getroot()
+    ns = {"tei": TEI_NS}
     authors: list[str] = []
-    for author in root.findall(".//tei:analytic/tei:author", {"tei": TEI_NS}):
-        forename = author.findtext("tei:persName/tei:forename", default="", namespaces={"tei": TEI_NS})
-        surname = author.findtext("tei:persName/tei:surname", default="", namespaces={"tei": TEI_NS})
-        full_name = " ".join(part.strip() for part in (forename, surname) if part and part.strip())
+    for author in root.findall(".//tei:analytic/tei:author", ns):
+        forename = author.findtext(
+            "tei:persName/tei:forename",
+            default="",
+            namespaces=ns,
+        )
+        surname = author.findtext(
+            "tei:persName/tei:surname",
+            default="",
+            namespaces=ns,
+        )
+        parts = (forename, surname)
+        full_name = " ".join(
+            part.strip() for part in parts if part and part.strip()
+        )
         if full_name:
             authors.append(full_name)
+
+    typology = root.find(".//tei:classCode[@scheme='halTypology']", ns)
     return {
         "title": _text(root, ".//tei:analytic/tei:title"),
-        "document_type": (
-            root.find(".//tei:classCode[@scheme='halTypology']", {"tei": TEI_NS}).get("n")
-            if root.find(".//tei:classCode[@scheme='halTypology']", {"tei": TEI_NS}) is not None
-            else None
+        "document_type": typology.get("n") if typology is not None else None,
+        "publication_date": _text(
+            root,
+            ".//tei:imprint/tei:date[@type='datePub']",
         ),
-        "publication_date": _text(root, ".//tei:imprint/tei:date[@type='datePub']"),
         "authors": authors,
         "local_validation_errors": validate_tei(tree),
     }
@@ -129,7 +142,8 @@ def prepare_production_batch(
         }
         manifest_path = target / "production-manifest.json"
         manifest_path.write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
     except Exception:
         shutil.rmtree(target, ignore_errors=True)
