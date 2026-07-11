@@ -30,13 +30,28 @@ def build_search_url(publication: Publication, rows: int = 10) -> str:
     query_parts = [f'title_t:"{solr_phrase(publication.title)}"']
     if publication.year:
         query_parts.append(f"producedDateY_i:{publication.year}")
+    params = {"q": " AND ".join(query_parts), "fl": FIELDS, "rows": rows, "wt": "json"}
+    return f"{HAL_SEARCH_URL}?{urlencode(params)}"
+
+
+def build_idhal_url(idhal: str, rows: int = 1000) -> str:
     params = {
-        "q": " AND ".join(query_parts),
+        "q": f'authIdHal_s:"{solr_phrase(idhal)}"',
         "fl": FIELDS,
         "rows": rows,
         "wt": "json",
     }
     return f"{HAL_SEARCH_URL}?{urlencode(params)}"
+
+
+def fetch_idhal_candidates(
+    idhal: str,
+    opener: Callable[..., object] = urlopen,
+    timeout: float = 20.0,
+) -> list[dict[str, object]]:
+    with opener(build_idhal_url(idhal), timeout=timeout) as response:  # type: ignore[attr-defined]
+        payload = json.load(response)
+    return list(payload.get("response", {}).get("docs", []))
 
 
 def score_candidate(publication: Publication, candidate: dict[str, object]) -> float:
@@ -66,13 +81,13 @@ def score_candidate(publication: Publication, candidate: dict[str, object]) -> f
 
 def candidate_to_match(publication: Publication, candidate: dict[str, object]) -> HALMatch:
     score = score_candidate(publication, candidate)
-    if score >= 90:
-        status = HALMatchStatus.FOUND
-    elif score >= 70:
-        status = HALMatchStatus.REVIEW
-    else:
-        status = HALMatchStatus.NOT_FOUND
-
+    status = (
+        HALMatchStatus.FOUND
+        if score >= 90
+        else HALMatchStatus.REVIEW
+        if score >= 70
+        else HALMatchStatus.NOT_FOUND
+    )
     title = candidate.get("title_s")
     if isinstance(title, list):
         title = title[0] if title else None
@@ -80,7 +95,6 @@ def candidate_to_match(publication: Publication, candidate: dict[str, object]) -
     if isinstance(authors, str):
         authors = [authors]
     hal_id = candidate.get("halId_s")
-
     return HALMatch(
         status=status,
         hal_id=str(hal_id) if hal_id else None,
@@ -93,25 +107,44 @@ def candidate_to_match(publication: Publication, candidate: dict[str, object]) -
     )
 
 
+def best_match(publication: Publication, candidates: list[dict[str, object]]) -> HALMatch:
+    if not candidates:
+        return HALMatch(status=HALMatchStatus.NOT_FOUND)
+    matches = [candidate_to_match(publication, candidate) for candidate in candidates]
+    return max(matches, key=lambda match: match.score)
+
+
 def search_publication(
     publication: Publication,
     opener: Callable[..., object] = urlopen,
     timeout: float = 20.0,
 ) -> HALMatch:
     try:
-        search_url = build_search_url(publication)
-        with opener(search_url, timeout=timeout) as response:  # type: ignore[attr-defined]
+        with opener(build_search_url(publication), timeout=timeout) as response:  # type: ignore[attr-defined]
             payload = json.load(response)
-        candidates = payload.get("response", {}).get("docs", [])
-        if not candidates:
-            return HALMatch(status=HALMatchStatus.NOT_FOUND)
-        matches = [candidate_to_match(publication, candidate) for candidate in candidates]
-        return max(matches, key=lambda match: match.score)
-    except Exception as exc:  # network and malformed-response errors become review data
+        return best_match(publication, payload.get("response", {}).get("docs", []))
+    except Exception as exc:
         return HALMatch(status=HALMatchStatus.ERROR, error=str(exc))
 
 
-def match_publications(publications: list[Publication]) -> list[Publication]:
+def match_publications(
+    publications: list[Publication],
+    idhal: str | None = None,
+    opener: Callable[..., object] = urlopen,
+) -> list[Publication]:
+    candidates: list[dict[str, object]] | None = None
+    if idhal:
+        try:
+            candidates = fetch_idhal_candidates(idhal, opener=opener)
+        except Exception as exc:
+            for publication in publications:
+                publication.hal_match = HALMatch(status=HALMatchStatus.ERROR, error=str(exc))
+            return publications
+
     for publication in publications:
-        publication.hal_match = search_publication(publication)
+        publication.hal_match = (
+            best_match(publication, candidates)
+            if candidates is not None
+            else search_publication(publication, opener=opener)
+        )
     return publications
