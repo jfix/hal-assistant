@@ -29,3 +29,21 @@ def test_parse_docx_sections_and_metadata(tmp_path: Path) -> None:
     assert items[1].title == "Mon article"
     assert items[1].url == "https://example.org/a"
     assert items[1].authors == ["Florence Fix"]
+
+
+def test_url_only_paragraph_is_attached_to_previous_citation(tmp_path: Path) -> None:
+    source = tmp_path / "continuation.docx"
+    document = Document()
+    document.add_paragraph("Communication dans un congrès")
+    document.add_paragraph(
+        "« Une communication », in Actes du colloque, Paris, 2025, p.19-31."
+    )
+    document.add_paragraph("https://example.org/book/99.")
+    document.save(source)
+
+    items = parse_docx(source, default_author="Florence Fix")
+
+    assert len(items) == 1
+    assert items[0].title == "Une communication"
+    assert items[0].url == "https://example.org/book/99"
+    assert "https://example.org/book/99" in items[0].raw_citation
