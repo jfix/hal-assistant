@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hal-assistant"
+version = "0.1.0"
+description = "Turn academic publication lists into structured data ready for HAL workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "HAL Assistant contributors" }]
+dependencies = [
+  "openpyxl>=3.1.5",
+  "pydantic>=2.10",
+  "python-docx>=1.1.2",
+  "typer>=0.15",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "ruff>=0.9",
+]
+
+[project.scripts]
+hal-assistant = "hal_assistant.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hal_assistant"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
