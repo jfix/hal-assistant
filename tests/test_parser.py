@@ -3,7 +3,7 @@ from pathlib import Path
 from docx import Document
 
 from hal_assistant.models import PublicationType
-from hal_assistant.parser import extract_title, parse_docx
+from hal_assistant.parser import extract_title, normalize_centuries, parse_docx
 
 
 def test_extract_quoted_title() -> None:
@@ -18,6 +18,19 @@ def test_extract_title_with_nested_french_guillemets() -> None:
     assert (
         extract_title(citation)
         == "Qu’est-ce qu’un « mauvais » théâtre de science-fiction (avant 1920) ?"
+    )
+
+
+def test_normalize_centuries_uppercases_explicit_roman_numerals() -> None:
+    assert normalize_centuries("Femmes de spectacle au xixe siècle") == (
+        "Femmes de spectacle au XIXe siècle"
+    )
+    assert normalize_centuries("du xviie-xixe siècles") == "du XVIIe-XIXe siècles"
+
+
+def test_normalize_centuries_does_not_change_ordinary_words() -> None:
+    assert normalize_centuries("Pauvreté, maladie et fin de vie") == (
+        "Pauvreté, maladie et fin de vie"
     )
 
 
@@ -59,6 +72,24 @@ def test_leading_italic_span_is_used_as_complete_title(tmp_path: Path) -> None:
     assert items[0].title == title
     assert items[0].year == 2024
     assert items[0].pages == "132"
+
+
+def test_nonitalic_space_inside_italic_title_is_preserved(tmp_path: Path) -> None:
+    source = tmp_path / "century-title.docx"
+    document = Document()
+    document.add_paragraph("Ouvrages")
+    paragraph = document.add_paragraph()
+    first = paragraph.add_run("Femmes de spectacle au xixe")
+    first.italic = True
+    paragraph.add_run("\u00a0")
+    century = paragraph.add_run("siècle")
+    century.italic = True
+    paragraph.add_run(", Paris, Exemple, 2022, 196p.")
+    document.save(source)
+
+    items = parse_docx(source, default_author="Florence Fix")
+
+    assert items[0].title == "Femmes de spectacle au XIXe siècle"
 
 
 def test_quoted_title_wins_over_later_italic_text(tmp_path: Path) -> None:
