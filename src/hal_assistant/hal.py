@@ -30,7 +30,12 @@ def build_search_url(publication: Publication, rows: int = 10) -> str:
     query_parts = [f'title_t:"{solr_phrase(publication.title)}"']
     if publication.year:
         query_parts.append(f"producedDateY_i:{publication.year}")
-    params = {"q": " AND ".join(query_parts), "fl": FIELDS, "rows": rows, "wt": "json"}
+    params = {
+        "q": " AND ".join(query_parts),
+        "fl": FIELDS,
+        "rows": rows,
+        "wt": "json",
+    }
     return f"{HAL_SEARCH_URL}?{urlencode(params)}"
 
 
@@ -49,7 +54,8 @@ def fetch_idhal_candidates(
     opener: Callable[..., object] = urlopen,
     timeout: float = 20.0,
 ) -> list[dict[str, object]]:
-    with opener(build_idhal_url(idhal), timeout=timeout) as response:  # type: ignore[attr-defined]
+    search_url = build_idhal_url(idhal)
+    with opener(search_url, timeout=timeout) as response:  # type: ignore[attr-defined]
         payload = json.load(response)
     return list(payload.get("response", {}).get("docs", []))
 
@@ -59,7 +65,9 @@ def score_candidate(publication: Publication, candidate: dict[str, object]) -> f
     if isinstance(candidate_title, list):
         candidate_title = candidate_title[0] if candidate_title else ""
     title_score = SequenceMatcher(
-        None, normalize(publication.title), normalize(str(candidate_title))
+        None,
+        normalize(publication.title),
+        normalize(str(candidate_title)),
     ).ratio()
 
     year_score = 0.0
@@ -81,13 +89,13 @@ def score_candidate(publication: Publication, candidate: dict[str, object]) -> f
 
 def candidate_to_match(publication: Publication, candidate: dict[str, object]) -> HALMatch:
     score = score_candidate(publication, candidate)
-    status = (
-        HALMatchStatus.FOUND
-        if score >= 90
-        else HALMatchStatus.REVIEW
-        if score >= 70
-        else HALMatchStatus.NOT_FOUND
-    )
+    if score >= 90:
+        status = HALMatchStatus.FOUND
+    elif score >= 70:
+        status = HALMatchStatus.REVIEW
+    else:
+        status = HALMatchStatus.NOT_FOUND
+
     title = candidate.get("title_s")
     if isinstance(title, list):
         title = title[0] if title else None
@@ -95,6 +103,7 @@ def candidate_to_match(publication: Publication, candidate: dict[str, object]) -
     if isinstance(authors, str):
         authors = [authors]
     hal_id = candidate.get("halId_s")
+
     return HALMatch(
         status=status,
         hal_id=str(hal_id) if hal_id else None,
@@ -120,7 +129,8 @@ def search_publication(
     timeout: float = 20.0,
 ) -> HALMatch:
     try:
-        with opener(build_search_url(publication), timeout=timeout) as response:  # type: ignore[attr-defined]
+        search_url = build_search_url(publication)
+        with opener(search_url, timeout=timeout) as response:  # type: ignore[attr-defined]
             payload = json.load(response)
         return best_match(publication, payload.get("response", {}).get("docs", []))
     except Exception as exc:
@@ -138,7 +148,10 @@ def match_publications(
             candidates = fetch_idhal_candidates(idhal, opener=opener)
         except Exception as exc:
             for publication in publications:
-                publication.hal_match = HALMatch(status=HALMatchStatus.ERROR, error=str(exc))
+                publication.hal_match = HALMatch(
+                    status=HALMatchStatus.ERROR,
+                    error=str(exc),
+                )
             return publications
 
     for publication in publications:
