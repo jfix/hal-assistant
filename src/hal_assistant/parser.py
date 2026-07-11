@@ -9,7 +9,9 @@ from .models import Publication, PublicationType
 
 SECTION_TYPES: dict[str, PublicationType] = {
     "Ouvrages": PublicationType.BOOK,
-    "Ouvrages en co-direction (mais HAL ne fait pas la différence avec Ouvrages)": PublicationType.EDITED_BOOK,
+    (
+        "Ouvrages en co-direction (mais HAL ne fait pas la différence avec Ouvrages)"
+    ): PublicationType.EDITED_BOOK,
     "N°spécial de revue": PublicationType.JOURNAL_ISSUE,
     "Chapitre d’ouvrage": PublicationType.BOOK_CHAPTER,
     "Notice d’encyclopédie ou de dictionnaire": PublicationType.DICTIONARY_ENTRY,
@@ -24,6 +26,7 @@ PAGES_RE = re.compile(
 )
 URL_RE = re.compile(r"https?://[^\s,;]+|www\.[^\s,;]+", re.IGNORECASE)
 SPACE_RE = re.compile(r"\s+")
+URL_ONLY_RE = re.compile(r"^(?:https?://|www\.)\S+\.?$", re.IGNORECASE)
 
 
 def normalize_text(value: str) -> str:
@@ -78,6 +81,11 @@ def parse_docx(path: str | Path, default_author: str | None = None) -> list[Publ
         if text in SECTION_TYPES:
             current_section = text
             current_type = SECTION_TYPES[text]
+            continue
+        if URL_ONLY_RE.fullmatch(text) and publications:
+            previous = publications[-1]
+            previous.raw_citation = f"{previous.raw_citation} {text}"
+            previous.url = URL_RE.search(text).group(0).rstrip(".)")
             continue
         publications.append(
             parse_citation(text, current_section, current_type, number, default_author)
