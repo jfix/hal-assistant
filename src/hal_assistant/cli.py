@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from .deposit import build_deposit_plans, export_deposit_plans
 from .enrichment import enrich_publications
 from .exporters import export_excel, export_json
 from .hal import match_publications
@@ -77,6 +78,30 @@ def match_hal(
         typer.echo(f"  {status}: {count}")
     typer.echo(f"JSON:  {json_path}")
     typer.echo(f"Excel: {excel_path}")
+
+
+@app.command("prepare-deposits")
+def prepare_deposits(
+    source: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, readable=True),
+    ],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path(
+        "output/dry-run"
+    ),
+) -> None:
+    """Generate a credential-free HAL deposit plan without uploading anything."""
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    publications = [Publication.model_validate(item) for item in payload]
+    plans = build_deposit_plans(publications)
+    json_path, excel_path = export_deposit_plans(plans, output_dir)
+    statuses = Counter(plan.status.value for plan in plans)
+    typer.echo(f"Prepared {len(plans)} dry-run deposit plans")
+    for status, count in sorted(statuses.items()):
+        typer.echo(f"  {status}: {count}")
+    typer.echo(f"JSON:  {json_path}")
+    typer.echo(f"Excel: {excel_path}")
+    typer.echo(f"Packages: {output_dir / 'packages'}")
 
 
 @app.command()
