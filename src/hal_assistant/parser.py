@@ -28,6 +28,7 @@ PAGES_RE = re.compile(
 URL_RE = re.compile(r"https?://[^\s,;]+|www\.[^\s,;]+", re.IGNORECASE)
 SPACE_RE = re.compile(r"\s+")
 URL_ONLY_RE = re.compile(r"^(?:https?://|www\.)\S+\.?$", re.IGNORECASE)
+FRENCH_TITLE_END_RE = re.compile(r"»(?=\s*(?:,|$))")
 
 
 def normalize_text(value: str) -> str:
@@ -36,9 +37,12 @@ def normalize_text(value: str) -> str:
 
 def extract_title(citation: str, formatted_title: str | None = None) -> str:
     citation = citation.strip()
-    if citation.startswith(("«", '"')):
-        closing = "»" if citation.startswith("«") else '"'
-        end = citation.find(closing, 1)
+    if citation.startswith("«"):
+        closing_matches = list(FRENCH_TITLE_END_RE.finditer(citation, 1))
+        if closing_matches:
+            return citation[1 : closing_matches[-1].start()].strip()
+    elif citation.startswith('"'):
+        end = citation.find('"', 1)
         if end > 1:
             return citation[1:end].strip()
     if formatted_title:

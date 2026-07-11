@@ -10,6 +10,17 @@ def test_extract_quoted_title() -> None:
     assert extract_title("« Un titre », in Une revue, 2024, p.1-10.") == "Un titre"
 
 
+def test_extract_title_with_nested_french_guillemets() -> None:
+    citation = (
+        "« Qu’est-ce qu’un « mauvais » théâtre de science-fiction (avant 1920) ? », "
+        "in Res Futurae, n°18, 2021."
+    )
+    assert (
+        extract_title(citation)
+        == "Qu’est-ce qu’un « mauvais » théâtre de science-fiction (avant 1920) ?"
+    )
+
+
 def test_parse_docx_sections_and_metadata(tmp_path: Path) -> None:
     source = tmp_path / "sample.docx"
     document = Document()
