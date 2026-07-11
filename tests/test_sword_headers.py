@@ -1,10 +1,8 @@
-from hal_assistant.hal_xml import PACKAGING
-
-from hal_assistant.sword import _headers
+from hal_assistant import sword
 
 
 def test_sword_headers_preserve_existing_affiliations() -> None:
-    headers = _headers(
+    headers = sword._headers(
         "login",
         "password",
         test=True,
@@ -15,13 +13,13 @@ def test_sword_headers_preserve_existing_affiliations() -> None:
     assert headers["X-test"] == "1"
     assert headers["On-Behalf-Of"] == "idhal|florence-fix"
     assert headers["Content-Type"] == "text/xml"
-    assert headers["Packaging"] == PACKAGING
+    assert headers["Packaging"] == sword.PACKAGING
 
 
 def test_production_headers_also_preserve_existing_affiliations() -> None:
-    headers = _headers("login", "password", test=False, on_behalf_of=None)
+    headers = sword._headers("login", "password", test=False, on_behalf_of=None)
 
     assert headers["LoadFilter"] == "noaffiliation"
     assert headers["Content-Type"] == "text/xml"
-    assert headers["Packaging"] == PACKAGING
+    assert headers["Packaging"] == sword.PACKAGING
     assert "X-test" not in headers
