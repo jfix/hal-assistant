@@ -20,7 +20,12 @@ def _record() -> dict[str, object]:
     }
 
 
-def _write_ledger(path: Path, *, accepted: bool = True, environment: str = "preprod") -> None:
+def _write_ledger(
+    path: Path,
+    *,
+    accepted: bool = True,
+    environment: str = "preprod",
+) -> None:
     path.write_text(
         json.dumps(
             {
@@ -42,14 +47,23 @@ def _write_ledger(path: Path, *, accepted: bool = True, environment: str = "prep
     )
 
 
-def test_prepare_production_batch_copies_only_preprod_accepted_files(tmp_path: Path) -> None:
+def test_prepare_production_batch_copies_only_preprod_accepted_files(
+    tmp_path: Path,
+) -> None:
     xml_dir = tmp_path / "hal-xml"
     xml_dir.mkdir()
-    tree = build_tei(_record(), domain="shs.litt", domain_label="Littératures")
+    tree = build_tei(
+        _record(),
+        domain="shs.litt",
+        domain_label="Littératures",
+    )
     write_tei(tree, xml_dir / "pub-0002.xml")
     _write_ledger(xml_dir / "submission-ledger.json")
 
-    batch = prepare_production_batch(xml_dir, output_dir=tmp_path / "production")
+    batch = prepare_production_batch(
+        xml_dir,
+        output_dir=tmp_path / "production",
+    )
 
     assert [path.name for path in batch.files] == ["pub-0002.xml"]
     manifest = json.loads(batch.manifest_path.read_text(encoding="utf-8"))
@@ -61,20 +75,33 @@ def test_prepare_production_batch_copies_only_preprod_accepted_files(tmp_path: P
     assert manifest["files"][0]["title"] == "Livre validé"
 
 
-def test_prepare_production_batch_rejects_failed_preprod_result(tmp_path: Path) -> None:
+def test_prepare_production_batch_rejects_failed_preprod_result(
+    tmp_path: Path,
+) -> None:
     xml_dir = tmp_path / "hal-xml"
     xml_dir.mkdir()
     (xml_dir / "pub-0002.xml").write_text("<TEI/>", encoding="utf-8")
     _write_ledger(xml_dir / "submission-ledger.json", accepted=False)
 
     with pytest.raises(ValueError, match="rejected notices"):
-        prepare_production_batch(xml_dir, output_dir=tmp_path / "production")
+        prepare_production_batch(
+            xml_dir,
+            output_dir=tmp_path / "production",
+        )
 
 
-def test_prepare_production_batch_rejects_non_preprod_ledger(tmp_path: Path) -> None:
+def test_prepare_production_batch_rejects_non_preprod_ledger(
+    tmp_path: Path,
+) -> None:
     xml_dir = tmp_path / "hal-xml"
     xml_dir.mkdir()
-    _write_ledger(xml_dir / "submission-ledger.json", environment="production")
+    _write_ledger(
+        xml_dir / "submission-ledger.json",
+        environment="production",
+    )
 
     with pytest.raises(ValueError, match="preproduction test"):
-        prepare_production_batch(xml_dir, output_dir=tmp_path / "production")
+        prepare_production_batch(
+            xml_dir,
+            output_dir=tmp_path / "production",
+        )
