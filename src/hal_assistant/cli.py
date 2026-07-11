@@ -18,9 +18,15 @@ app = typer.Typer(no_args_is_help=True, help="Prepare publication metadata for H
 
 @app.command()
 def parse(
-    document: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
+    document: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, readable=True),
+    ],
     output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path("output"),
-    author: Annotated[str | None, typer.Option(help="Default author added to every record.")] = None,
+    author: Annotated[
+        str | None,
+        typer.Option(help="Default author added to every record."),
+    ] = None,
 ) -> None:
     """Parse a DOCX publication list and export JSON and Excel review files."""
     publications = parse_docx(document, default_author=author)
@@ -37,8 +43,13 @@ def parse(
 
 @app.command("match-hal")
 def match_hal(
-    source: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
-    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path("output/hal-review"),
+    source: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, readable=True),
+    ],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path(
+        "output/hal-review"
+    ),
     idhal: Annotated[
         str | None,
         typer.Option(help="Use this HAL Id as the authoritative candidate set."),
