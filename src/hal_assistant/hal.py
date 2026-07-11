@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from collections.abc import Callable
 from difflib import SequenceMatcher
-from typing import Callable
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -99,7 +99,8 @@ def search_publication(
     timeout: float = 20.0,
 ) -> HALMatch:
     try:
-        with opener(build_search_url(publication), timeout=timeout) as response:  # type: ignore[attr-defined]
+        search_url = build_search_url(publication)
+        with opener(search_url, timeout=timeout) as response:  # type: ignore[attr-defined]
             payload = json.load(response)
         candidates = payload.get("response", {}).get("docs", [])
         if not candidates:
