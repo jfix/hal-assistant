@@ -16,6 +16,25 @@ class PublicationType(StrEnum):
     UNKNOWN = "unknown"
 
 
+class HALMatchStatus(StrEnum):
+    FOUND = "found"
+    REVIEW = "review"
+    NOT_FOUND = "not_found"
+    ERROR = "error"
+
+
+class HALMatch(BaseModel):
+    status: HALMatchStatus
+    hal_id: str | None = None
+    title: str | None = None
+    year: int | None = None
+    authors: list[str] = Field(default_factory=list)
+    document_type: str | None = None
+    score: float = 0.0
+    url: str | None = None
+    error: str | None = None
+
+
 class Publication(BaseModel):
     publication_type: PublicationType
     section: str
@@ -27,3 +46,4 @@ class Publication(BaseModel):
     authors: list[str] = Field(default_factory=list)
     language: str = "fr"
     source_paragraph: int
+    hal_match: HALMatch | None = None
