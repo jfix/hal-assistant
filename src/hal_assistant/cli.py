@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from .enrichment import enrich_publications
 from .exporters import export_excel, export_json
 from .hal import match_publications
 from .models import Publication
@@ -17,24 +18,14 @@ app = typer.Typer(no_args_is_help=True, help="Prepare publication metadata for H
 
 @app.command()
 def parse(
-    document: Annotated[
-        Path,
-        typer.Argument(exists=True, dir_okay=False, readable=True),
-    ],
-    output_dir: Annotated[
-        Path,
-        typer.Option("--output-dir", "-o"),
-    ] = Path("output"),
-    author: Annotated[
-        str | None,
-        typer.Option(help="Default author added to every record."),
-    ] = None,
+    document: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path("output"),
+    author: Annotated[str | None, typer.Option(help="Default author added to every record.")] = None,
 ) -> None:
     """Parse a DOCX publication list and export JSON and Excel review files."""
     publications = parse_docx(document, default_author=author)
     json_path = export_json(publications, output_dir / "publications.json")
     excel_path = export_excel(publications, output_dir / "publications.xlsx")
-
     typer.echo(f"Parsed {len(publications)} publications")
     for publication_type, count in sorted(
         Counter(item.publication_type.value for item in publications).items()
@@ -46,22 +37,25 @@ def parse(
 
 @app.command("match-hal")
 def match_hal(
-    source: Annotated[
-        Path,
-        typer.Argument(exists=True, dir_okay=False, readable=True),
-    ],
-    output_dir: Annotated[
-        Path,
-        typer.Option("--output-dir", "-o"),
-    ] = Path("output/hal-review"),
+    source: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path("output/hal-review"),
+    idhal: Annotated[
+        str | None,
+        typer.Option(help="Use this HAL Id as the authoritative candidate set."),
+    ] = None,
+    enrich: Annotated[
+        bool,
+        typer.Option(help="Enrich records not confidently found in HAL."),
+    ] = False,
 ) -> None:
     """Search HAL without modifying it and export a match-review report."""
     payload = json.loads(source.read_text(encoding="utf-8"))
     publications = [Publication.model_validate(item) for item in payload]
-    match_publications(publications)
+    match_publications(publications, idhal=idhal)
+    if enrich:
+        enrich_publications(publications)
     json_path = export_json(publications, output_dir / "publications-with-hal.json")
     excel_path = export_excel(publications, output_dir / "publications-with-hal.xlsx")
-
     statuses = Counter(
         item.hal_match.status.value
         for item in publications
