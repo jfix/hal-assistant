@@ -18,6 +18,55 @@ app = typer.Typer(no_args_is_help=True, help="Prepare publication metadata for H
 
 
 @app.command()
+def run(
+    document: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, readable=True),
+    ],
+    idhal: Annotated[
+        str,
+        typer.Option(help="HAL Id used as the authoritative existing-publication set."),
+    ],
+    author: Annotated[
+        str | None,
+        typer.Option(help="Default author added to every parsed record."),
+    ] = None,
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path("output"),
+    enrich: Annotated[
+        bool,
+        typer.Option("--enrich/--no-enrich", help="Enrich unmatched records before planning."),
+    ] = True,
+) -> None:
+    """Run DOCX parsing, HAL matching, enrichment, and deposit dry-run end to end."""
+    parsed_dir = output_dir / "parsed"
+    review_dir = output_dir / "hal-review"
+    dry_run_dir = output_dir / "dry-run"
+
+    publications = parse_docx(document, default_author=author)
+    parsed_json = export_json(publications, parsed_dir / "publications.json")
+    export_excel(publications, parsed_dir / "publications.xlsx")
+
+    match_publications(publications, idhal=idhal)
+    if enrich:
+        enrich_publications(publications)
+    review_json = export_json(publications, review_dir / "publications-with-hal.json")
+    export_excel(publications, review_dir / "publications-with-hal.xlsx")
+
+    plans = build_deposit_plans(publications)
+    plan_json, plan_excel = export_deposit_plans(plans, dry_run_dir)
+    statuses = Counter(plan.status.value for plan in plans)
+
+    typer.echo(f"Parsed {len(publications)} publications from {document}")
+    for status, count in sorted(statuses.items()):
+        typer.echo(f"  {status}: {count}")
+    typer.echo(f"Parsed JSON: {parsed_json}")
+    typer.echo(f"HAL review JSON: {review_json}")
+    typer.echo(f"Deposit plan JSON: {plan_json}")
+    typer.echo(f"Deposit plan Excel: {plan_excel}")
+    typer.echo(f"Packages: {dry_run_dir / 'packages'}")
+
+
+@app.command()
 def parse(
     document: Annotated[
         Path,
