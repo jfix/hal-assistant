@@ -17,3 +17,71 @@ jobs:
         run: uv run ruff check .
       - name: Test
         run: uv run pytest
+      - name: Export Florence HAL records
+        if: github.head_ref == 'agent/v0.2-hal-matching'
+        shell: python
+        run: |
+          import csv
+          import json
+          from pathlib import Path
+          from urllib.parse import urlencode
+          from urllib.request import urlopen
+
+          fields = "halId_s,title_s,producedDateY_i,authFullName_s,docType_s"
+          queries = {
+              "idhal": "authIdHal_s:florence-fix",
+              "author_name": 'authFullName_t:"Florence Fix"',
+          }
+          combined = {}
+          raw = {}
+          for label, query in queries.items():
+              url = "https://api.archives-ouvertes.fr/search/hal/?" + urlencode(
+                  {"q": query, "fl": fields, "rows": 1000, "wt": "json"}
+              )
+              with urlopen(url, timeout=60) as response:
+                  payload = json.load(response)
+              docs = payload.get("response", {}).get("docs", [])
+              raw[label] = docs
+              for doc in docs:
+                  key = doc.get("halId_s") or json.dumps(doc, sort_keys=True)
+                  combined[key] = doc
+
+          records = list(combined.values())
+          records.sort(
+              key=lambda item: (
+                  item.get("producedDateY_i") or 0,
+                  str(item.get("title_s") or ""),
+              )
+          )
+          Path("hal-florence-fix.json").write_text(
+              json.dumps({"queries": raw, "combined": records}, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          with open("hal-florence-fix.csv", "w", encoding="utf-8", newline="") as handle:
+              writer = csv.writer(handle)
+              writer.writerow(["hal_id", "title", "year", "authors", "document_type", "url"])
+              for item in records:
+                  title = item.get("title_s") or ""
+                  if isinstance(title, list):
+                      title = title[0] if title else ""
+                  authors = item.get("authFullName_s") or []
+                  if isinstance(authors, str):
+                      authors = [authors]
+                  hal_id = item.get("halId_s") or ""
+                  writer.writerow([
+                      hal_id,
+                      title,
+                      item.get("producedDateY_i") or "",
+                      "; ".join(authors),
+                      item.get("docType_s") or "",
+                      f"https://hal.science/{hal_id}" if hal_id else "",
+                  ])
+          print(f"Exported {len(records)} unique HAL records")
+      - name: Upload Florence HAL records
+        if: github.head_ref == 'agent/v0.2-hal-matching'
+        uses: actions/upload-artifact@v4
+        with:
+          name: florence-fix-hal-records
+          path: |
+            hal-florence-fix.json
+            hal-florence-fix.csv
