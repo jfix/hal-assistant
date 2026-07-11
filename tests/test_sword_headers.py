@@ -1,4 +1,5 @@
 from hal_assistant.hal_xml import PACKAGING
+
 from hal_assistant.sword import _headers
 
 
