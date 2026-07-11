@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import time
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from threading import Event, Thread
 from typing import Annotated
 
 import typer
@@ -15,6 +19,29 @@ from .models import Publication
 from .parser import parse_docx
 
 app = typer.Typer(no_args_is_help=True, help="Prepare publication metadata for HAL workflows.")
+
+
+@contextmanager
+def heartbeat(label: str, interval: float = 10.0) -> Iterator[None]:
+    """Print periodic activity messages while a long-running phase is active."""
+    stop = Event()
+    started = time.monotonic()
+
+    def report() -> None:
+        while not stop.wait(interval):
+            elapsed = int(time.monotonic() - started)
+            typer.echo(f"  … {label} still running ({elapsed}s elapsed)")
+
+    typer.echo(f"▶ {label}")
+    thread = Thread(target=report, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=0.2)
+        elapsed = time.monotonic() - started
+        typer.echo(f"✓ {label} complete ({elapsed:.1f}s)")
 
 
 @app.command()
@@ -42,21 +69,31 @@ def run(
     review_dir = output_dir / "hal-review"
     dry_run_dir = output_dir / "dry-run"
 
-    publications = parse_docx(document, default_author=author)
-    parsed_json = export_json(publications, parsed_dir / "publications.json")
-    export_excel(publications, parsed_dir / "publications.xlsx")
+    with heartbeat("Parsing DOCX and exporting parsed records"):
+        publications = parse_docx(document, default_author=author)
+        parsed_json = export_json(publications, parsed_dir / "publications.json")
+        export_excel(publications, parsed_dir / "publications.xlsx")
+    typer.echo(f"  Parsed {len(publications)} publications")
 
-    match_publications(publications, idhal=idhal)
+    with heartbeat(f"Matching publications against HAL Id {idhal}"):
+        match_publications(publications, idhal=idhal)
+
     if enrich:
-        enrich_publications(publications)
-    review_json = export_json(publications, review_dir / "publications-with-hal.json")
-    export_excel(publications, review_dir / "publications-with-hal.xlsx")
+        with heartbeat("Enriching unmatched publications through Crossref/OpenAlex"):
+            enrich_publications(publications)
+    else:
+        typer.echo("- Metadata enrichment skipped")
 
-    plans = build_deposit_plans(publications)
-    plan_json, plan_excel = export_deposit_plans(plans, dry_run_dir)
+    with heartbeat("Writing HAL review files"):
+        review_json = export_json(publications, review_dir / "publications-with-hal.json")
+        export_excel(publications, review_dir / "publications-with-hal.xlsx")
+
+    with heartbeat("Building dry-run deposit plan"):
+        plans = build_deposit_plans(publications)
+        plan_json, plan_excel = export_deposit_plans(plans, dry_run_dir)
     statuses = Counter(plan.status.value for plan in plans)
 
-    typer.echo(f"Parsed {len(publications)} publications from {document}")
+    typer.echo("\nDry run complete")
     for status, count in sorted(statuses.items()):
         typer.echo(f"  {status}: {count}")
     typer.echo(f"Parsed JSON: {parsed_json}")
