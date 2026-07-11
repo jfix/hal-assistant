@@ -12,10 +12,14 @@ def test_sword_headers_preserve_existing_affiliations() -> None:
     assert headers["LoadFilter"] == "noaffiliation"
     assert headers["X-test"] == "1"
     assert headers["On-Behalf-Of"] == "idhal|florence-fix"
+    assert headers["Content-Type"] == "text/xml"
+    assert headers["Packaging"] == "http://purl.org/net/sword-types/AOfr"
 
 
 def test_production_headers_also_preserve_existing_affiliations() -> None:
     headers = _headers("login", "password", test=False, on_behalf_of=None)
 
     assert headers["LoadFilter"] == "noaffiliation"
+    assert headers["Content-Type"] == "text/xml"
+    assert headers["Packaging"] == "http://purl.org/net/sword-types/AOfr"
     assert "X-test" not in headers

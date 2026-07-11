@@ -59,7 +59,9 @@ def _headers(login: str, password: str, *, test: bool, on_behalf_of: str | None)
     headers = {
         "Authorization": f"Basic {token}",
         "Packaging": PACKAGING,
-        "Content-Type": "text/xml; charset=utf-8",
+        # HAL's SWORD endpoint performs a strict media-type check for AOfr
+        # notice deposits and documents text/xml without a charset parameter.
+        "Content-Type": "text/xml",
         "User-Agent": "hal-assistant/0.6",
         "ForceDoublonByTitle": "0",
         # HAL-specific option: do not overwrite affiliations already attached
