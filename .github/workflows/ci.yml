@@ -17,3 +17,31 @@ jobs:
         run: uv run ruff check .
       - name: Test
         run: uv run pytest
+      - name: Export Florence HAL records
+        run: |
+          python - <<'PY'
+          import csv, json, urllib.parse, urllib.request
+          queries = {
+              "idhal": "authIdHal_s:florence-fix",
+              "author": 'authFullName_t:"Florence Fix"',
+          }
+          results = {}
+          for name, query in queries.items():
+              params = {
+                  "q": query,
+                  "fl": "halId_s,title_s,producedDateY_i,authFullName_s,docType_s",
+                  "rows": 1000,
+                  "wt": "json",
+              }
+              url = "https://api.archives-ouvertes.fr/search/hal/?" + urllib.parse.urlencode(params)
+              with urllib.request.urlopen(url, timeout=60) as response:
+                  results[name] = json.load(response)["response"]
+          with open("hal-florence-fix.json", "w", encoding="utf-8") as handle:
+              json.dump(results, handle, ensure_ascii=False, indent=2)
+          print({name: result["numFound"] for name, result in results.items()})
+          PY
+      - name: Upload Florence HAL records
+        uses: actions/upload-artifact@v4
+        with:
+          name: florence-fix-hal-records-refresh
+          path: hal-florence-fix.json
