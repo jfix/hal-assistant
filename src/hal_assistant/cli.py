@@ -15,8 +15,10 @@ from .deposit import build_deposit_plans, export_deposit_plans
 from .enrichment import enrich_publications
 from .exporters import export_excel, export_json
 from .hal import match_publications
+from .hal_xml import build_xml_batch
 from .models import Publication
 from .parser import parse_docx
+from .sword import submit_batch
 
 app = typer.Typer(no_args_is_help=True, help="Prepare publication metadata for HAL workflows.")
 
@@ -188,6 +190,103 @@ def prepare_deposits(
     typer.echo(f"JSON:  {json_path}")
     typer.echo(f"Excel: {excel_path}")
     typer.echo(f"Packages: {output_dir / 'packages'}")
+
+
+@app.command("build-hal-xml")
+def build_hal_xml(
+    source: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, readable=True),
+    ],
+    domain: Annotated[
+        str,
+        typer.Option(help="Required HAL scientific-domain code, for example shs.litt."),
+    ],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path(
+        "output/hal-xml"
+    ),
+    domain_label: Annotated[
+        str | None,
+        typer.Option(help="Optional human-readable HAL domain label."),
+    ] = None,
+    idhal: Annotated[
+        str | None,
+        typer.Option(help="IdHAL attached to the selected author in generated TEI."),
+    ] = None,
+    idhal_author: Annotated[
+        str | None,
+        typer.Option(help="Author name that should receive --idhal."),
+    ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option(help="Build only the first N records for a small test batch."),
+    ] = None,
+) -> None:
+    """Convert reviewed HAL-ready JSON into notice-only AOfr TEI XML files."""
+    with heartbeat("Building HAL AOfr TEI XML"):
+        results = build_xml_batch(
+            source,
+            output_dir,
+            domain=domain,
+            domain_label=domain_label,
+            idhal=idhal,
+            idhal_author=idhal_author,
+            limit=limit,
+        )
+    valid = sum(not item.errors for item in results)
+    blocked = len(results) - valid
+    typer.echo(f"Generated {valid} XML files; blocked: {blocked}")
+    typer.echo(f"Manifest: {output_dir / 'manifest.json'}")
+    if blocked:
+        raise typer.Exit(code=1)
+
+
+@app.command("submit-hal")
+def submit_hal(
+    xml_dir: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=False, readable=True),
+    ],
+    environment: Annotated[
+        str,
+        typer.Option(help="HAL endpoint: preprod or production."),
+    ] = "preprod",
+    test: Annotated[
+        bool,
+        typer.Option("--test/--no-test", help="Send X-test: 1; enabled by default."),
+    ] = True,
+    execute: Annotated[
+        bool,
+        typer.Option(help="Required for non-test production writes."),
+    ] = False,
+    on_behalf_of: Annotated[
+        str | None,
+        typer.Option(help="HAL On-Behalf-Of value, e.g. idhal|florence-fix."),
+    ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option(help="Submit at most N XML notices."),
+    ] = None,
+) -> None:
+    """Validate notices remotely through HAL SWORD, or submit with explicit write gates."""
+    with heartbeat(f"Submitting HAL SWORD batch to {environment}"):
+        try:
+            results, ledger = submit_batch(
+                xml_dir,
+                environment=environment,
+                test=test,
+                execute=execute,
+                on_behalf_of=on_behalf_of,
+                limit=limit,
+            )
+        except (RuntimeError, ValueError) as exc:
+            typer.echo(f"Refused: {exc}", err=True)
+            raise typer.Exit(code=2) from exc
+    accepted = sum(item.accepted for item in results)
+    typer.echo(f"HAL accepted/test-validated: {accepted}/{len(results)}")
+    typer.echo(f"Ledger: {ledger}")
+    if accepted != len(results):
+        raise typer.Exit(code=1)
 
 
 @app.command()
