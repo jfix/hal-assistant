@@ -35,6 +35,19 @@ class HALMatch(BaseModel):
     error: str | None = None
 
 
+class Enrichment(BaseModel):
+    source: str
+    score: float = 0.0
+    canonical_title: str | None = None
+    doi: str | None = None
+    journal: str | None = None
+    publisher: str | None = None
+    issn: list[str] = Field(default_factory=list)
+    isbn: list[str] = Field(default_factory=list)
+    url: str | None = None
+    error: str | None = None
+
+
 class Publication(BaseModel):
     publication_type: PublicationType
     section: str
@@ -47,3 +60,4 @@ class Publication(BaseModel):
     language: str = "fr"
     source_paragraph: int
     hal_match: HALMatch | None = None
+    enrichment: Enrichment | None = None

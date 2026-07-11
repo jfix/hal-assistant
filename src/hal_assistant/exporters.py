@@ -45,6 +45,16 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
         "HAL authors",
         "HAL URL",
         "HAL error",
+        "enrichment source",
+        "enrichment score",
+        "canonical title",
+        "DOI",
+        "journal",
+        "publisher",
+        "ISSN",
+        "ISBN",
+        "enrichment URL",
+        "enrichment error",
         "raw_citation",
         "source_paragraph",
     ]
@@ -52,10 +62,11 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
     for cell in sheet[1]:
         cell.font = Font(bold=True)
     sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = f"A1:Q{max(1, len(publications) + 1)}"
+    sheet.auto_filter.ref = f"A1:AA{max(1, len(publications) + 1)}"
 
     for item in publications:
         match = item.hal_match
+        enrichment = item.enrichment
         sheet.append(
             [
                 item.publication_type.value,
@@ -73,6 +84,16 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
                 "; ".join(match.authors) if match else None,
                 match.url if match else None,
                 match.error if match else None,
+                enrichment.source if enrichment else None,
+                enrichment.score if enrichment else None,
+                enrichment.canonical_title if enrichment else None,
+                enrichment.doi if enrichment else None,
+                enrichment.journal if enrichment else None,
+                enrichment.publisher if enrichment else None,
+                "; ".join(enrichment.issn) if enrichment else None,
+                "; ".join(enrichment.isbn) if enrichment else None,
+                enrichment.url if enrichment else None,
+                enrichment.error if enrichment else None,
                 item.raw_citation,
                 item.source_paragraph,
             ]
@@ -84,7 +105,7 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
         "C": 58,
         "D": 10,
         "E": 14,
-        "F": 48,
+        "F": 40,
         "G": 24,
         "H": 16,
         "I": 20,
@@ -93,9 +114,19 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
         "L": 10,
         "M": 34,
         "N": 42,
-        "O": 40,
-        "P": 100,
-        "Q": 18,
+        "O": 36,
+        "P": 18,
+        "Q": 14,
+        "R": 58,
+        "S": 28,
+        "T": 34,
+        "U": 34,
+        "V": 24,
+        "W": 24,
+        "X": 42,
+        "Y": 36,
+        "Z": 100,
+        "AA": 18,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width

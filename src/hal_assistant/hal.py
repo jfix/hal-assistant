@@ -39,12 +39,35 @@ def build_search_url(publication: Publication, rows: int = 10) -> str:
     return f"{HAL_SEARCH_URL}?{urlencode(params)}"
 
 
+def build_idhal_url(idhal: str, rows: int = 1000) -> str:
+    params = {
+        "q": f'authIdHal_s:"{solr_phrase(idhal)}"',
+        "fl": FIELDS,
+        "rows": rows,
+        "wt": "json",
+    }
+    return f"{HAL_SEARCH_URL}?{urlencode(params)}"
+
+
+def fetch_idhal_candidates(
+    idhal: str,
+    opener: Callable[..., object] = urlopen,
+    timeout: float = 20.0,
+) -> list[dict[str, object]]:
+    search_url = build_idhal_url(idhal)
+    with opener(search_url, timeout=timeout) as response:  # type: ignore[attr-defined]
+        payload = json.load(response)
+    return list(payload.get("response", {}).get("docs", []))
+
+
 def score_candidate(publication: Publication, candidate: dict[str, object]) -> float:
     candidate_title = candidate.get("title_s") or ""
     if isinstance(candidate_title, list):
         candidate_title = candidate_title[0] if candidate_title else ""
     title_score = SequenceMatcher(
-        None, normalize(publication.title), normalize(str(candidate_title))
+        None,
+        normalize(publication.title),
+        normalize(str(candidate_title)),
     ).ratio()
 
     year_score = 0.0
@@ -93,6 +116,13 @@ def candidate_to_match(publication: Publication, candidate: dict[str, object]) -
     )
 
 
+def best_match(publication: Publication, candidates: list[dict[str, object]]) -> HALMatch:
+    if not candidates:
+        return HALMatch(status=HALMatchStatus.NOT_FOUND)
+    matches = [candidate_to_match(publication, candidate) for candidate in candidates]
+    return max(matches, key=lambda match: match.score)
+
+
 def search_publication(
     publication: Publication,
     opener: Callable[..., object] = urlopen,
@@ -102,16 +132,32 @@ def search_publication(
         search_url = build_search_url(publication)
         with opener(search_url, timeout=timeout) as response:  # type: ignore[attr-defined]
             payload = json.load(response)
-        candidates = payload.get("response", {}).get("docs", [])
-        if not candidates:
-            return HALMatch(status=HALMatchStatus.NOT_FOUND)
-        matches = [candidate_to_match(publication, candidate) for candidate in candidates]
-        return max(matches, key=lambda match: match.score)
-    except Exception as exc:  # network and malformed-response errors become review data
+        return best_match(publication, payload.get("response", {}).get("docs", []))
+    except Exception as exc:
         return HALMatch(status=HALMatchStatus.ERROR, error=str(exc))
 
 
-def match_publications(publications: list[Publication]) -> list[Publication]:
+def match_publications(
+    publications: list[Publication],
+    idhal: str | None = None,
+    opener: Callable[..., object] = urlopen,
+) -> list[Publication]:
+    candidates: list[dict[str, object]] | None = None
+    if idhal:
+        try:
+            candidates = fetch_idhal_candidates(idhal, opener=opener)
+        except Exception as exc:
+            for publication in publications:
+                publication.hal_match = HALMatch(
+                    status=HALMatchStatus.ERROR,
+                    error=str(exc),
+                )
+            return publications
+
     for publication in publications:
-        publication.hal_match = search_publication(publication)
+        publication.hal_match = (
+            best_match(publication, candidates)
+            if candidates is not None
+            else search_publication(publication, opener=opener)
+        )
     return publications
