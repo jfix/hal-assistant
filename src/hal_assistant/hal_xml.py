@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,6 +64,18 @@ def _identifier_values(value: Any) -> list[str]:
     return [str(value)]
 
 
+def _structure_id(record: dict[str, Any], explicit: str | None) -> str | None:
+    value = explicit or _first(record, "hal_structure_id", "structure_id")
+    if value in (None, ""):
+        value = os.getenv("HAL_STRUCTURE_ID")
+    if value in (None, ""):
+        return None
+    normalized = str(value).removeprefix("struct-").removeprefix("#struct-")
+    if not normalized.isdigit():
+        raise ValueError("HAL structure ID must be numeric")
+    return normalized
+
+
 def build_tei(
     record: dict[str, Any],
     *,
@@ -70,6 +83,7 @@ def build_tei(
     domain_label: str | None = None,
     idhal: str | None = None,
     idhal_author: str | None = None,
+    structure_id: str | None = None,
 ) -> ET.ElementTree:
     """Build a notice-only HAL AOfr TEI document from normalized review metadata."""
     title = _first(record, "title")
@@ -77,6 +91,7 @@ def build_tei(
     year = _first(record, "producedDateY", "year")
     language = _first(record, "language") or "fr"
     authors = _authors(record)
+    resolved_structure_id = _structure_id(record, structure_id)
 
     missing = [
         name
@@ -102,25 +117,38 @@ def build_tei(
     bibl_full = ET.SubElement(list_bibl, _tag("biblFull"))
     ET.SubElement(bibl_full, _tag("titleStmt"))
 
+    notes_stmt = ET.SubElement(bibl_full, _tag("notesStmt"))
+    ET.SubElement(notes_stmt, _tag("note"), {"type": "audience", "n": "2"})
+    ET.SubElement(notes_stmt, _tag("note"), {"type": "popular", "n": "0"})
+
     source_desc = ET.SubElement(bibl_full, _tag("sourceDesc"))
     bibl_struct = ET.SubElement(source_desc, _tag("biblStruct"))
     analytic = ET.SubElement(bibl_struct, _tag("analytic"))
     _text(analytic, "title", title, **{f"{{{XML_NS}}}lang": str(language)})
 
-    for author_name in authors:
+    for index, author_name in enumerate(authors):
         author = ET.SubElement(analytic, _tag("author"), {"role": "aut"})
         pers_name = ET.SubElement(author, _tag("persName"))
         forename, surname = _split_author(author_name)
         if forename:
             _text(pers_name, "forename", forename, type="first")
         _text(pers_name, "surname", surname)
-        if idhal and (idhal_author is None or author_name.casefold() == idhal_author.casefold()):
+
+        selected_author = idhal_author is None and index == 0
+        if idhal_author is not None:
+            selected_author = author_name.casefold() == idhal_author.casefold()
+        if idhal and selected_author:
             _text(author, "idno", idhal, type="idhal")
+        if resolved_structure_id and selected_author:
+            ET.SubElement(author, _tag("affiliation"), {"ref": f"#struct-{resolved_structure_id}"})
 
     monogr = ET.SubElement(bibl_struct, _tag("monogr"))
     container = _first(record, "journalOrBookTitle", "container_title", "journal")
     if container:
-        _text(monogr, "title", container, level="j")
+        level = "m" if str(document_type) in {"OUV", "COUV"} else "j"
+        _text(monogr, "title", container, level=level)
+    elif str(document_type) == "OUV":
+        _text(monogr, "title", title, level="m")
 
     for doi in _identifier_values(_first(record, "doi")):
         _text(bibl_struct, "idno", doi, type="doi")
@@ -179,6 +207,11 @@ def validate_tei(tree: ET.ElementTree) -> list[str]:
 def write_tei(tree: ET.ElementTree, path: str | Path) -> Path:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
+    # Register again at the serialization boundary. This prevents ElementTree
+    # from emitting ns0-prefixed TEI when other code has changed its registry.
+    ET.register_namespace("", TEI_NS)
+    ET.register_namespace("hal", HAL_NS)
+    ET.register_namespace("xsi", XSI_NS)
     ET.indent(tree, space="  ")
     tree.write(output, encoding="utf-8", xml_declaration=True)
     return output
@@ -199,6 +232,7 @@ def build_xml_batch(
     domain_label: str | None = None,
     idhal: str | None = None,
     idhal_author: str | None = None,
+    structure_id: str | None = None,
     limit: int | None = None,
 ) -> list[XMLBuildResult]:
     payload = json.loads(Path(source).read_text(encoding="utf-8"))
@@ -219,6 +253,7 @@ def build_xml_batch(
                 domain_label=domain_label,
                 idhal=idhal,
                 idhal_author=idhal_author,
+                structure_id=structure_id,
             )
             errors = validate_tei(tree)
             path = output / f"{publication_id}.xml"
@@ -234,6 +269,7 @@ def build_xml_batch(
         "domain": domain,
         "domain_label": domain_label,
         "idhal": idhal,
+        "structure_id": structure_id or os.getenv("HAL_STRUCTURE_ID"),
         "count": len(results),
         "valid": sum(not item.errors for item in results),
         "blocked": sum(bool(item.errors) for item in results),
