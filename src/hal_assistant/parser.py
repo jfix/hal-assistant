@@ -29,29 +29,42 @@ URL_RE = re.compile(r"https?://[^\s,;]+|www\.[^\s,;]+", re.IGNORECASE)
 SPACE_RE = re.compile(r"\s+")
 URL_ONLY_RE = re.compile(r"^(?:https?://|www\.)\S+\.?$", re.IGNORECASE)
 FRENCH_TITLE_END_RE = re.compile(r"»(?=\s*(?:,|$))")
+CENTURY_RE = re.compile(
+    r"\b([ivxlcdm]+)e(?=(?:\s+siècles?\b|\s*[-–—]\s*[ivxlcdm]+e\s+siècles?\b))",
+    re.IGNORECASE,
+)
 
 
 def normalize_text(value: str) -> str:
     return SPACE_RE.sub(" ", value.replace("\u00a0", " ")).strip()
 
 
+def normalize_centuries(value: str) -> str:
+    """Uppercase Roman numerals in explicit French century expressions."""
+    normalized = normalize_text(value)
+    return CENTURY_RE.sub(lambda match: f"{match.group(1).upper()}e", normalized)
+
+
 def extract_title(citation: str, formatted_title: str | None = None) -> str:
     citation = citation.strip()
+    title: str | None = None
     if citation.startswith("«"):
         closing_matches = list(FRENCH_TITLE_END_RE.finditer(citation, 1))
         if closing_matches:
-            return citation[1 : closing_matches[-1].start()].strip()
+            title = citation[1 : closing_matches[-1].start()].strip()
     elif citation.startswith('"'):
         end = citation.find('"', 1)
         if end > 1:
-            return citation[1:end].strip()
-    if formatted_title:
-        return normalize_text(formatted_title).strip().rstrip(",.")
-    return citation.split(",", 1)[0].strip().rstrip(".")
+            title = citation[1:end].strip()
+    if title is None and formatted_title:
+        title = normalize_text(formatted_title).strip().rstrip(",.")
+    if title is None:
+        title = citation.split(",", 1)[0].strip().rstrip(".")
+    return normalize_centuries(title)
 
 
 def leading_italic_title(paragraph: Paragraph) -> str | None:
-    """Return a leading contiguous italic span, ignoring initial whitespace."""
+    """Return a leading italic span, allowing formatting-only whitespace runs."""
     parts: list[str] = []
     started = False
     for run in paragraph.runs:
@@ -64,6 +77,10 @@ def leading_italic_title(paragraph: Paragraph) -> str | None:
         if is_italic:
             parts.append(text)
             started = True
+        elif started and not text.strip():
+            # Word often stores a non-breaking space between two italic words
+            # as a separate, non-italic run. Keep it inside the title span.
+            parts.append(text)
         elif started:
             break
         else:
