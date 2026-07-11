@@ -52,13 +52,14 @@ def _identifier(publication: Publication, name: str) -> object | None:
 
 
 def build_deposit_plan(publication: Publication, index: int) -> DepositPlan:
-    if publication.hal_match and publication.hal_match.status is HALMatchStatus.FOUND:
+    existing = publication.hal_match
+    if existing and existing.status is HALMatchStatus.FOUND:
         return DepositPlan(
             index=index,
             status=DepositStatus.SKIPPED_EXISTING,
             title=publication.title,
-            document_type=publication.hal_match.document_type,
-            warnings=[f"Already present in HAL as {publication.hal_match.hal_id}"],
+            document_type=existing.document_type,
+            warnings=[f"Already present in HAL as {existing.hal_id}"],
         )
 
     document_type = HAL_DOCUMENT_TYPES.get(publication.publication_type)
@@ -94,7 +95,11 @@ def build_deposit_plan(publication: Publication, index: int) -> DepositPlan:
         "sourceUrl": publication.url,
         "rawCitation": publication.raw_citation,
     }
-    payload = {key: value for key, value in payload.items() if value not in (None, "", [])}
+    payload = {
+        key: value
+        for key, value in payload.items()
+        if value not in (None, "", [])
+    }
 
     if errors:
         status = DepositStatus.BLOCKED
@@ -114,17 +119,27 @@ def build_deposit_plan(publication: Publication, index: int) -> DepositPlan:
 
 
 def build_deposit_plans(publications: list[Publication]) -> list[DepositPlan]:
-    return [build_deposit_plan(publication, index) for index, publication in enumerate(publications, 1)]
+    return [
+        build_deposit_plan(publication, index)
+        for index, publication in enumerate(publications, 1)
+    ]
 
 
-def export_deposit_plans(plans: list[DepositPlan], output_dir: str | Path) -> tuple[Path, Path]:
+def export_deposit_plans(
+    plans: list[DepositPlan],
+    output_dir: str | Path,
+) -> tuple[Path, Path]:
     output = Path(output_dir)
     packages = output / "packages"
     packages.mkdir(parents=True, exist_ok=True)
 
     json_path = output / "deposit-plan.json"
     json_path.write_text(
-        json.dumps([plan.model_dump(mode="json") for plan in plans], ensure_ascii=False, indent=2),
+        json.dumps(
+            [plan.model_dump(mode="json") for plan in plans],
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     for plan in plans:
