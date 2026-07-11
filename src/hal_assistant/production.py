@@ -5,7 +5,7 @@ import json
 import shutil
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -130,7 +130,7 @@ def prepare_production_batch(
 
         manifest = {
             "format": "hal-assistant-production-batch-v1",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "source_directory": str(source_dir),
             "preprod_ledger": str(ledger),
             "environment": "production",
