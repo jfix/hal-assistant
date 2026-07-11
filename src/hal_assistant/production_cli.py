@@ -7,7 +7,10 @@ import typer
 
 from .production import prepare_production_batch
 
-app = typer.Typer(no_args_is_help=True, help="Freeze a validated HAL production batch.")
+app = typer.Typer(
+    no_args_is_help=True,
+    help="Freeze a validated HAL production batch.",
+)
 
 
 @app.command()
@@ -18,11 +21,20 @@ def prepare(
     ],
     ledger: Annotated[
         Path | None,
-        typer.Option(help="Preproduction submission ledger; defaults to XML_DIR/submission-ledger.json."),
+        typer.Option(
+            help=(
+                "Preproduction submission ledger; defaults to "
+                "XML_DIR/submission-ledger.json."
+            )
+        ),
     ] = None,
     output_dir: Annotated[
         Path,
-        typer.Option("--output-dir", "-o", help="New, empty directory for the frozen batch."),
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="New, empty directory for the frozen batch.",
+        ),
     ] = Path("output/hal-production"),
 ) -> None:
     """Copy only preproduction-accepted notices and write a checksum manifest."""
