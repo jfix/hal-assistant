@@ -1,13 +1,44 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
 from .review_import import import_review_workbook
 
 app = typer.Typer(no_args_is_help=True, help="Import Florence's validated HAL review workbook.")
+
+HAL_DOCUMENT_TYPES = {
+    "book": "OUV",
+    "edited_book": "OUV",
+    "journal_issue": "OUV",
+    "book_chapter": "COUV",
+    "dictionary_entry": "COUV",
+    "conference_paper": "COMM",
+    "journal_article": "ART",
+}
+
+
+def add_hal_document_types(path: Path) -> list[dict[str, Any]]:
+    """Add the HAL typology expected by the AOfr XML builder."""
+    records = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(records, list):
+        raise ValueError("HAL-ready JSON must contain an array of records")
+
+    for record in records:
+        publication_type = str(record.get("publication_type") or "")
+        document_type = HAL_DOCUMENT_TYPES.get(publication_type)
+        if document_type is None:
+            raise ValueError(
+                f"Unsupported publication type for {record.get('publication_id')}: "
+                f"{publication_type or '<blank>'}"
+            )
+        record["document_type"] = document_type
+
+    path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    return records
 
 
 @app.command()
@@ -23,6 +54,8 @@ def import_review(
     """Validate approved workbook rows and create HAL-ready JSON."""
     try:
         result = import_review_workbook(workbook, output_dir)
+        if not result.blocked_count:
+            add_hal_document_types(result.approved_path)
     except (OSError, ValueError) as exc:
         typer.echo(f"Import failed: {exc}", err=True)
         raise typer.Exit(code=2) from exc
