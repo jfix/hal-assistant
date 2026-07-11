@@ -31,6 +31,41 @@ def test_parse_docx_sections_and_metadata(tmp_path: Path) -> None:
     assert items[1].authors == ["Florence Fix"]
 
 
+def test_leading_italic_span_is_used_as_complete_title(tmp_path: Path) -> None:
+    source = tmp_path / "italic-title.docx"
+    document = Document()
+    document.add_paragraph("N°spécial de revue")
+    paragraph = document.add_paragraph()
+    title = "Growing Old in Nineteenth-Century France. Texts, Fictions, Representations"
+    title_run = paragraph.add_run(title)
+    title_run.italic = True
+    paragraph.add_run(", numéro de L’Esprit créateur, Summer 2024, vol. 64, n°2, 132p.")
+    document.save(source)
+
+    items = parse_docx(source, default_author="Florence Fix")
+
+    assert len(items) == 1
+    assert items[0].title == title
+    assert items[0].year == 2024
+    assert items[0].pages == "132"
+
+
+def test_quoted_title_wins_over_later_italic_text(tmp_path: Path) -> None:
+    source = tmp_path / "quoted-title.docx"
+    document = Document()
+    document.add_paragraph("Article dans revue")
+    paragraph = document.add_paragraph()
+    paragraph.add_run("« Mon article », in ")
+    journal = paragraph.add_run("Revue test")
+    journal.italic = True
+    paragraph.add_run(", 2024, p.1-10.")
+    document.save(source)
+
+    items = parse_docx(source, default_author="Florence Fix")
+
+    assert items[0].title == "Mon article"
+
+
 def test_url_only_paragraph_is_attached_to_previous_citation(tmp_path: Path) -> None:
     source = tmp_path / "continuation.docx"
     document = Document()
