@@ -14,13 +14,6 @@ jobs:
       - name: Install
         run: uv sync --extra dev
       - name: Lint
-        run: uv run ruff check . --output-format=json > ruff.json || true
-      - name: Upload Ruff diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: ruff-diagnostics
-          path: ruff.json
-      - name: Enforce lint
         run: uv run ruff check .
       - name: Test
         run: uv run pytest
