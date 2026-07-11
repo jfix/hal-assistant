@@ -54,6 +54,25 @@ def _parse_atom(body: str) -> tuple[str | None, str | None]:
     return hal_id, hal_url
 
 
+def _headers(login: str, password: str, *, test: bool, on_behalf_of: str | None) -> dict[str, str]:
+    token = base64.b64encode(f"{login}:{password}".encode()).decode()
+    headers = {
+        "Authorization": f"Basic {token}",
+        "Packaging": PACKAGING,
+        "Content-Type": "text/xml; charset=utf-8",
+        "User-Agent": "hal-assistant/0.6",
+        "ForceDoublonByTitle": "0",
+        # HAL-specific option: do not overwrite affiliations already attached
+        # to identified authors in HAL.
+        "LoadFilter": "noaffiliation",
+    }
+    if test:
+        headers["X-test"] = "1"
+    if on_behalf_of:
+        headers["On-Behalf-Of"] = on_behalf_of
+    return headers
+
+
 def submit_notice(
     xml_path: str | Path,
     *,
@@ -71,18 +90,7 @@ def submit_notice(
     login, password = _credentials()
     path = Path(xml_path)
     url = PREPROD_URL if environment == "preprod" else PRODUCTION_URL
-    token = base64.b64encode(f"{login}:{password}".encode()).decode()
-    headers = {
-        "Authorization": f"Basic {token}",
-        "Packaging": PACKAGING,
-        "Content-Type": "text/xml; charset=utf-8",
-        "User-Agent": "hal-assistant/0.6",
-        "ForceDoublonByTitle": "0",
-    }
-    if test:
-        headers["X-test"] = "1"
-    if on_behalf_of:
-        headers["On-Behalf-Of"] = on_behalf_of
+    headers = _headers(login, password, test=test, on_behalf_of=on_behalf_of)
 
     request = Request(url, data=path.read_bytes(), headers=headers, method="POST")
     try:
@@ -161,6 +169,7 @@ def submit_batch(
             {
                 "environment": environment,
                 "test": test,
+                "load_filter": "noaffiliation",
                 "submitted": len(results),
                 "accepted": sum(item.accepted for item in results),
                 "results": [item.__dict__ for item in results],
@@ -182,16 +191,7 @@ def _submit_production_notice(
     """Production-only implementation, reachable after all batch guards pass."""
     login, password = _credentials()
     path = Path(xml_path)
-    token = base64.b64encode(f"{login}:{password}".encode()).decode()
-    headers = {
-        "Authorization": f"Basic {token}",
-        "Packaging": PACKAGING,
-        "Content-Type": "text/xml; charset=utf-8",
-        "User-Agent": "hal-assistant/0.6",
-        "ForceDoublonByTitle": "0",
-    }
-    if on_behalf_of:
-        headers["On-Behalf-Of"] = on_behalf_of
+    headers = _headers(login, password, test=False, on_behalf_of=on_behalf_of)
     request = Request(PRODUCTION_URL, data=path.read_bytes(), headers=headers, method="POST")
     try:
         with urlopen(request, timeout=timeout) as response:
