@@ -74,7 +74,11 @@ class Enrichment(BaseModel):
     error: str | None = None
 
 
-def stable_publication_id(publication_type: PublicationType, title: str, raw_citation: str) -> str:
+def stable_publication_id(
+    publication_type: PublicationType,
+    title: str,
+    raw_citation: str,
+) -> str:
     """Return a reproducible identifier independent of paragraph order and output paths."""
     normalized = "|".join(
         (
