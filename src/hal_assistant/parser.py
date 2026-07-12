@@ -169,7 +169,12 @@ def _before_publication_city(value: str) -> str:
 
 def extract_book_title(citation: str) -> str | None:
     tail = _after_quoted_title(citation)
-    tail = re.sub(r"^(?:in|dans|avant-propos\s+(?:in|à))\s+", "", tail, flags=re.IGNORECASE)
+    tail = re.sub(
+        r"^(?:in|dans|avant-propos\s+(?:in|à))\s+",
+        "",
+        tail,
+        flags=re.IGNORECASE,
+    )
     tail = _strip_editor_prefix(tail)
     tail = CONFERENCE_NOTE_RE.split(tail, maxsplit=1)[0].strip(" ,")
     title = _before_publication_city(tail)
@@ -191,7 +196,12 @@ def extract_conference_metadata(citation: str) -> dict[str, str | None]:
     note = normalize_text(note_match.group("note")) if note_match else None
 
     tail = _after_quoted_title(citation)
-    tail = re.sub(r"^(?:in|dans|avant-propos\s+à)\s+", "", tail, flags=re.IGNORECASE)
+    tail = re.sub(
+        r"^(?:in|dans|avant-propos\s+à)\s+",
+        "",
+        tail,
+        flags=re.IGNORECASE,
+    )
     tail = _strip_editor_prefix(tail)
     conference_title = tail.split("[", 1)[0].strip(" ,") or None
 
@@ -208,14 +218,11 @@ def extract_conference_metadata(citation: str) -> dict[str, str | None]:
             country = COUNTRY_BY_CITY.get(city)
 
     years = [match.group(1) for match in YEAR_RE.finditer(note or "")]
-    exact_date = None
-    # A bare year or year range is evidence, but not an exact HAL start date.
-    if note and re.search(r"\b\d{1,2}\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(?:19|20)\d{2}\b", note, re.IGNORECASE):
-        exact_date = note
-
     return {
-        "conference_title": normalize_centuries(conference_title) if conference_title else None,
-        "conference_start_date": exact_date,
+        "conference_title": (
+            normalize_centuries(conference_title) if conference_title else None
+        ),
+        "conference_start_date": None,
         "conference_city": city,
         "conference_country": country,
         "conference_year_evidence": years[-1] if years else None,
@@ -235,13 +242,23 @@ def parse_citation(
     url_match = URL_RE.search(citation)
     metadata: dict[str, object] = {}
 
-    if publication_type in {PublicationType.BOOK_CHAPTER, PublicationType.DICTIONARY_ENTRY}:
+    chapter_types = {
+        PublicationType.BOOK_CHAPTER,
+        PublicationType.DICTIONARY_ENTRY,
+    }
+    if publication_type in chapter_types:
         metadata["book_title"] = extract_book_title(citation)
     elif publication_type is PublicationType.JOURNAL_ARTICLE:
         metadata["journal_title"] = extract_journal_title(citation)
     elif publication_type is PublicationType.CONFERENCE_PAPER:
         conference = extract_conference_metadata(citation)
-        metadata.update({key: value for key, value in conference.items() if key != "conference_year_evidence"})
+        metadata.update(
+            {
+                key: value
+                for key, value in conference.items()
+                if key != "conference_year_evidence"
+            }
+        )
 
     return Publication(
         publication_type=publication_type,
