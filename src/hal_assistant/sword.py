@@ -4,7 +4,7 @@ import base64
 import json
 import os
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -55,13 +55,19 @@ def _parse_atom(body: str) -> tuple[str | None, str | None]:
     return hal_id, hal_url
 
 
-def _headers(login: str, password: str, *, test: bool, on_behalf_of: str | None) -> dict[str, str]:
+def _headers(
+    login: str,
+    password: str,
+    *,
+    test: bool,
+    on_behalf_of: str | None,
+) -> dict[str, str]:
     token = base64.b64encode(f"{login}:{password}".encode()).decode()
     headers = {
         "Authorization": f"Basic {token}",
         "Packaging": PACKAGING,
         "Content-Type": "text/xml",
-        "User-Agent": "hal-assistant/0.8",
+        "User-Agent": "hal-assistant/0.9",
         "ForceDoublonByTitle": "0",
         "LoadFilter": "noaffiliation",
     }
@@ -127,6 +133,32 @@ def _ledger_name(environment: str, test: bool) -> str:
     return f"submission-ledger-{environment}-{suffix}.json"
 
 
+def _load_existing_ledger(
+    ledger: Path,
+    *,
+    environment: str,
+    test: bool,
+    resume: bool,
+) -> dict[str, object]:
+    if not ledger.exists():
+        return {}
+    if not resume:
+        raise ValueError(f"Refusing to overwrite existing ledger: {ledger}")
+    payload = json.loads(ledger.read_text(encoding="utf-8"))
+    if payload.get("environment") != environment or payload.get("test") is not test:
+        raise ValueError(f"Existing ledger does not match this submission stage: {ledger}")
+    return payload
+
+
+def _write_ledger_atomic(path: Path, payload: dict[str, object]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
 def submit_batch(
     xml_dir: str | Path,
     *,
@@ -135,8 +167,12 @@ def submit_batch(
     execute: bool,
     on_behalf_of: str | None,
     limit: int | None = None,
+    fail_fast: bool = False,
+    resume: bool = False,
 ) -> tuple[list[SWORDResult], Path]:
-    """Submit XML files with explicit production-write gating and save an immutable ledger."""
+    """Submit notices independently and maintain a cumulative, resumable ledger."""
+    if environment not in {"preprod", "production"}:
+        raise ValueError("environment must be 'preprod' or 'production'")
     if environment == "production" and not test and not execute:
         raise ValueError("Refusing production writes without --execute")
     if environment == "production" and not test:
@@ -148,14 +184,29 @@ def submit_batch(
 
     directory = Path(xml_dir)
     ledger = directory / _ledger_name(environment, test)
-    if ledger.exists():
-        raise ValueError(f"Refusing to overwrite existing ledger: {ledger}")
+    previous = _load_existing_ledger(
+        ledger,
+        environment=environment,
+        test=test,
+        resume=resume,
+    )
 
     files = sorted(directory.glob("*.xml"))
     if limit:
         files = files[:limit]
-    results: list[SWORDResult] = []
-    for path in files:
+
+    previous_results = {
+        str(item.get("xml_file")): item
+        for item in previous.get("results", [])
+        if isinstance(item, dict) and item.get("xml_file")
+    }
+    accepted_names = {
+        name for name, item in previous_results.items() if item.get("accepted") is True
+    }
+    pending_files = [path for path in files if path.name not in accepted_names]
+
+    attempt_results: list[SWORDResult] = []
+    for path in pending_files:
         if environment == "production" and not test:
             result = _submit_production_notice(path, on_behalf_of=on_behalf_of)
         else:
@@ -165,27 +216,47 @@ def submit_batch(
                 test=test,
                 on_behalf_of=on_behalf_of,
             )
-        results.append(result)
-        if not result.accepted:
+        attempt_results.append(result)
+        previous_results[path.name] = asdict(result)
+        if fail_fast and not result.accepted:
             break
 
-    ledger.write_text(
-        json.dumps(
-            {
-                "created_at": datetime.now(UTC).isoformat(),
-                "environment": environment,
-                "test": test,
-                "load_filter": "noaffiliation",
-                "submitted": len(results),
-                "accepted": sum(item.accepted for item in results),
-                "results": [item.__dict__ for item in results],
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
+    ordered_results: list[SWORDResult] = []
+    for path in files:
+        item = previous_results.get(path.name)
+        if item is not None:
+            ordered_results.append(SWORDResult(**item))
+
+    now = datetime.now(UTC).isoformat()
+    attempts = list(previous.get("attempts", []))
+    attempts.append(
+        {
+            "started_from_resume": bool(previous),
+            "completed_at": now,
+            "submitted": len(attempt_results),
+            "accepted": sum(item.accepted for item in attempt_results),
+            "rejected": sum(not item.accepted for item in attempt_results),
+            "results": [asdict(item) for item in attempt_results],
+        }
     )
-    return results, ledger
+    payload: dict[str, object] = {
+        "created_at": previous.get("created_at", now),
+        "updated_at": now,
+        "environment": environment,
+        "test": test,
+        "load_filter": "noaffiliation",
+        "fail_fast": fail_fast,
+        "resume": resume,
+        "candidate_files": len(files),
+        "submitted": len(ordered_results),
+        "accepted": sum(item.accepted for item in ordered_results),
+        "rejected": sum(not item.accepted for item in ordered_results),
+        "pending": len(files) - len(ordered_results),
+        "results": [asdict(item) for item in ordered_results],
+        "attempts": attempts,
+    }
+    _write_ledger_atomic(ledger, payload)
+    return ordered_results, ledger
 
 
 def _submit_production_notice(
