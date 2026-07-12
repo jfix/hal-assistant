@@ -32,6 +32,21 @@ class HALReadinessStatus(StrEnum):
     PRODUCTION_SUBMITTED = "production_submitted"
 
 
+class EnrichmentConfidence(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class MetadataEvidence(BaseModel):
+    field: str
+    value: str
+    source_url: str
+    source_name: str
+    confidence: EnrichmentConfidence
+    note: str | None = None
+
+
 class HALMatch(BaseModel):
     status: HALMatchStatus
     hal_id: str | None = None
@@ -58,6 +73,7 @@ class Enrichment(BaseModel):
 
 
 class Publication(BaseModel):
+    publication_id: str | None = None
     publication_type: PublicationType
     section: str
     raw_citation: str
@@ -88,6 +104,7 @@ class Publication(BaseModel):
     conference_city: str | None = None
     conference_country: str | None = None
     conference_country_code: str | None = None
+    metadata_evidence: list[MetadataEvidence] = Field(default_factory=list)
 
     hal_readiness: HALReadinessStatus = HALReadinessStatus.PARSED
     missing_required_fields: list[str] = Field(default_factory=list)
