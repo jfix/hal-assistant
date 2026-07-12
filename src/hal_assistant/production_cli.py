@@ -9,7 +9,7 @@ from .production import prepare_production_batch
 
 app = typer.Typer(
     no_args_is_help=True,
-    help="Freeze a validated HAL production batch.",
+    help="Freeze a validated HAL production batch into an immutable archive.",
 )
 
 
@@ -23,8 +23,8 @@ def prepare(
         Path | None,
         typer.Option(
             help=(
-                "Preproduction submission ledger; defaults to "
-                "XML_DIR/submission-ledger.json."
+                "Preproduction test ledger; defaults to the stage-specific ledger "
+                "in XML_DIR, with legacy fallback."
             )
         ),
     ] = None,
@@ -33,11 +33,11 @@ def prepare(
         typer.Option(
             "--output-dir",
             "-o",
-            help="New, empty directory for the frozen batch.",
+            help="Archive root; a unique timestamp-and-checksum batch is created inside it.",
         ),
-    ] = Path("output/hal-production"),
+    ] = Path("output/hal-archive"),
 ) -> None:
-    """Copy only preproduction-accepted notices and write a checksum manifest."""
+    """Archive accepted notices, their preproduction ledger, and a checksum manifest."""
     try:
         batch = prepare_production_batch(
             xml_dir,
@@ -49,8 +49,9 @@ def prepare(
         raise typer.Exit(code=2) from exc
 
     typer.echo(f"Production-ready XML files: {len(batch.files)}")
-    typer.echo(f"Batch directory: {batch.output_dir}")
+    typer.echo(f"Immutable batch directory: {batch.output_dir}")
     typer.echo(f"Manifest: {batch.manifest_path}")
+    typer.echo(f"Archive index: {batch.output_dir.parent / 'index.json'}")
     typer.echo("No production submission was performed.")
 
 

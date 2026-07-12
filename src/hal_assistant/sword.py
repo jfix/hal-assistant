@@ -5,6 +5,7 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -59,13 +60,9 @@ def _headers(login: str, password: str, *, test: bool, on_behalf_of: str | None)
     headers = {
         "Authorization": f"Basic {token}",
         "Packaging": PACKAGING,
-        # HAL's SWORD endpoint performs a strict media-type check for AOfr
-        # notice deposits and documents text/xml without a charset parameter.
         "Content-Type": "text/xml",
-        "User-Agent": "hal-assistant/0.6",
+        "User-Agent": "hal-assistant/0.8",
         "ForceDoublonByTitle": "0",
-        # HAL-specific option: do not overwrite affiliations already attached
-        # to identified authors in HAL.
         "LoadFilter": "noaffiliation",
     }
     if test:
@@ -93,7 +90,6 @@ def submit_notice(
     path = Path(xml_path)
     url = PREPROD_URL if environment == "preprod" else PRODUCTION_URL
     headers = _headers(login, password, test=test, on_behalf_of=on_behalf_of)
-
     request = Request(url, data=path.read_bytes(), headers=headers, method="POST")
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -126,6 +122,11 @@ def submit_notice(
         )
 
 
+def _ledger_name(environment: str, test: bool) -> str:
+    suffix = "test" if test else "submission"
+    return f"submission-ledger-{environment}-{suffix}.json"
+
+
 def submit_batch(
     xml_dir: str | Path,
     *,
@@ -135,7 +136,7 @@ def submit_batch(
     on_behalf_of: str | None,
     limit: int | None = None,
 ) -> tuple[list[SWORDResult], Path]:
-    """Submit XML files with explicit production-write gating and save a ledger."""
+    """Submit XML files with explicit production-write gating and save an immutable ledger."""
     if environment == "production" and not test and not execute:
         raise ValueError("Refusing production writes without --execute")
     if environment == "production" and not test:
@@ -146,13 +147,16 @@ def submit_batch(
             )
 
     directory = Path(xml_dir)
+    ledger = directory / _ledger_name(environment, test)
+    if ledger.exists():
+        raise ValueError(f"Refusing to overwrite existing ledger: {ledger}")
+
     files = sorted(directory.glob("*.xml"))
     if limit:
         files = files[:limit]
     results: list[SWORDResult] = []
     for path in files:
         if environment == "production" and not test:
-            # The production guard has already been checked above.
             result = _submit_production_notice(path, on_behalf_of=on_behalf_of)
         else:
             result = submit_notice(
@@ -165,10 +169,10 @@ def submit_batch(
         if not result.accepted:
             break
 
-    ledger = directory / "submission-ledger.json"
     ledger.write_text(
         json.dumps(
             {
+                "created_at": datetime.now(UTC).isoformat(),
                 "environment": environment,
                 "test": test,
                 "load_filter": "noaffiliation",
