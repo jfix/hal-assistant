@@ -40,20 +40,9 @@ def _inspect(path: Path) -> dict[str, Any]:
     ns = {"tei": TEI_NS}
     authors: list[str] = []
     for author in root.findall(".//tei:analytic/tei:author", ns):
-        forename = author.findtext(
-            "tei:persName/tei:forename",
-            default="",
-            namespaces=ns,
-        )
-        surname = author.findtext(
-            "tei:persName/tei:surname",
-            default="",
-            namespaces=ns,
-        )
-        parts = (forename, surname)
-        full_name = " ".join(
-            part.strip() for part in parts if part and part.strip()
-        )
+        forename = author.findtext("tei:persName/tei:forename", default="", namespaces=ns)
+        surname = author.findtext("tei:persName/tei:surname", default="", namespaces=ns)
+        full_name = " ".join(part.strip() for part in (forename, surname) if part.strip())
         if full_name:
             authors.append(full_name)
 
@@ -61,24 +50,39 @@ def _inspect(path: Path) -> dict[str, Any]:
     return {
         "title": _text(root, ".//tei:analytic/tei:title"),
         "document_type": typology.get("n") if typology is not None else None,
-        "publication_date": _text(
-            root,
-            ".//tei:imprint/tei:date[@type='datePub']",
-        ),
+        "publication_date": _text(root, ".//tei:imprint/tei:date[@type='datePub']"),
         "authors": authors,
         "local_validation_errors": validate_tei(tree),
     }
+
+
+def _default_ledger(source_dir: Path) -> Path:
+    preferred = source_dir / "submission-ledger-preprod-test.json"
+    legacy = source_dir / "submission-ledger.json"
+    return preferred if preferred.exists() else legacy
+
+
+def _write_index(archive_root: Path, entry: dict[str, Any]) -> None:
+    index_path = archive_root / "index.json"
+    payload = {"format": "hal-assistant-archive-index-v1", "batches": []}
+    if index_path.exists():
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+    batches = payload.setdefault("batches", [])
+    if any(item.get("batch_id") == entry["batch_id"] for item in batches):
+        raise ValueError(f"Batch already indexed: {entry['batch_id']}")
+    batches.append(entry)
+    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def prepare_production_batch(
     xml_dir: str | Path,
     *,
     ledger_path: str | Path | None = None,
-    output_dir: str | Path = "output/hal-production",
+    output_dir: str | Path = "output/hal-archive",
 ) -> ProductionBatch:
-    """Freeze preproduction-validated XML notices into a checksummed production batch."""
+    """Freeze accepted preproduction notices into a unique immutable archive batch."""
     source_dir = Path(xml_dir)
-    ledger = Path(ledger_path) if ledger_path else source_dir / "submission-ledger.json"
+    ledger = Path(ledger_path) if ledger_path else _default_ledger(source_dir)
     if not ledger.exists():
         raise ValueError(f"Preproduction ledger not found: {ledger}")
 
@@ -94,45 +98,59 @@ def prepare_production_batch(
         names = ", ".join(str(item.get("xml_file")) for item in rejected)
         raise ValueError(f"Ledger contains rejected notices: {names}")
 
-    target = Path(output_dir)
-    if target.exists() and any(target.iterdir()):
-        raise ValueError(f"Production directory is not empty: {target}")
-    target.mkdir(parents=True, exist_ok=True)
+    source_records: list[tuple[Path, dict[str, Any], str]] = []
+    for item in results:
+        filename = str(item.get("xml_file") or "")
+        if not filename.endswith(".xml") or Path(filename).name != filename:
+            raise ValueError(f"Invalid XML filename in ledger: {filename!r}")
+        source = source_dir / filename
+        if not source.exists():
+            raise ValueError(f"Validated XML file is missing: {source}")
+        inspection = _inspect(source)
+        if inspection["local_validation_errors"]:
+            raise ValueError(
+                f"Local validation now fails for {filename}: "
+                + "; ".join(inspection["local_validation_errors"])
+            )
+        source_records.append((source, inspection, _sha256(source)))
+
+    batch_digest = hashlib.sha256(
+        "\n".join(f"{path.name}:{digest}" for path, _, digest in source_records).encode()
+    ).hexdigest()
+    created = datetime.now(UTC)
+    batch_id = f"{created.strftime('%Y-%m-%dT%H%M%SZ')}-{batch_digest[:8]}"
+    archive_root = Path(output_dir)
+    target = archive_root / batch_id
+    if target.exists():
+        raise ValueError(f"Archive batch already exists: {target}")
+    target.mkdir(parents=True, exist_ok=False)
 
     files: list[Path] = []
     records: list[dict[str, Any]] = []
     try:
-        for item in results:
-            filename = str(item.get("xml_file") or "")
-            if not filename.endswith(".xml") or Path(filename).name != filename:
-                raise ValueError(f"Invalid XML filename in ledger: {filename!r}")
-            source = source_dir / filename
-            if not source.exists():
-                raise ValueError(f"Validated XML file is missing: {source}")
-            inspection = _inspect(source)
-            if inspection["local_validation_errors"]:
-                raise ValueError(
-                    f"Local validation now fails for {filename}: "
-                    + "; ".join(inspection["local_validation_errors"])
-                )
-            destination = target / filename
+        for source, inspection, digest in source_records:
+            destination = target / source.name
             shutil.copy2(source, destination)
             files.append(destination)
+            result = next(item for item in results if item.get("xml_file") == source.name)
             records.append(
                 {
-                    "xml_file": filename,
-                    "sha256": _sha256(destination),
+                    "xml_file": source.name,
+                    "sha256": digest,
                     "size_bytes": destination.stat().st_size,
                     **inspection,
-                    "preprod_status_code": item.get("status_code"),
+                    "preprod_status_code": result.get("status_code"),
                 }
             )
 
+        shutil.copy2(ledger, target / "submission-ledger-preprod-test.json")
         manifest = {
-            "format": "hal-assistant-production-batch-v1",
-            "created_at": datetime.now(UTC).isoformat(),
+            "format": "hal-assistant-production-batch-v2",
+            "batch_id": batch_id,
+            "batch_sha256": batch_digest,
+            "created_at": created.isoformat(),
+            "status": "production-ready",
             "source_directory": str(source_dir),
-            "preprod_ledger": str(ledger),
             "environment": "production",
             "test": False,
             "force_duplicate_by_title": False,
@@ -142,8 +160,18 @@ def prepare_production_batch(
         }
         manifest_path = target / "production-manifest.json"
         manifest_path.write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        _write_index(
+            archive_root,
+            {
+                "batch_id": batch_id,
+                "created_at": manifest["created_at"],
+                "status": manifest["status"],
+                "file_count": len(records),
+                "directory": str(target),
+                "batch_sha256": batch_digest,
+            },
         )
     except Exception:
         shutil.rmtree(target, ignore_errors=True)
