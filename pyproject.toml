@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hal-assistant"
-version = "0.8.0"
+version = "0.9.0"
 description = "Turn academic publication lists into structured data ready for HAL workflows."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,6 +28,8 @@ hal-assistant = "hal_assistant.cli:app"
 hal-review-import = "hal_assistant.review_cli:app"
 hal-diagnose = "hal_assistant.diagnose_cli:app"
 hal-prepare-production = "hal_assistant.production_cli:app"
+hal-build-xml = "hal_assistant.build_cli:app"
+hal-submit = "hal_assistant.submit_cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hal_assistant"]

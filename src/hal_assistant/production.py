@@ -80,7 +80,7 @@ def prepare_production_batch(
     ledger_path: str | Path | None = None,
     output_dir: str | Path = "output/hal-archive",
 ) -> ProductionBatch:
-    """Freeze accepted preproduction notices into a unique immutable archive batch."""
+    """Freeze only accepted preproduction notices into an immutable archive batch."""
     source_dir = Path(xml_dir)
     ledger = Path(ledger_path) if ledger_path else _default_ledger(source_dir)
     if not ledger.exists():
@@ -93,13 +93,14 @@ def prepare_production_batch(
     results = payload.get("results")
     if not isinstance(results, list) or not results:
         raise ValueError("Ledger contains no submission results")
-    rejected = [item for item in results if not item.get("accepted")]
-    if rejected:
-        names = ", ".join(str(item.get("xml_file")) for item in rejected)
-        raise ValueError(f"Ledger contains rejected notices: {names}")
 
-    source_records: list[tuple[Path, dict[str, Any], str]] = []
-    for item in results:
+    accepted_results = [item for item in results if item.get("accepted") is True]
+    rejected_results = [item for item in results if item.get("accepted") is not True]
+    if not accepted_results:
+        raise ValueError("Ledger contains no accepted notices to freeze")
+
+    source_records: list[tuple[Path, dict[str, Any], str, dict[str, Any]]] = []
+    for item in accepted_results:
         filename = str(item.get("xml_file") or "")
         if not filename.endswith(".xml") or Path(filename).name != filename:
             raise ValueError(f"Invalid XML filename in ledger: {filename!r}")
@@ -112,10 +113,10 @@ def prepare_production_batch(
                 f"Local validation now fails for {filename}: "
                 + "; ".join(inspection["local_validation_errors"])
             )
-        source_records.append((source, inspection, _sha256(source)))
+        source_records.append((source, inspection, _sha256(source), item))
 
     batch_digest = hashlib.sha256(
-        "\n".join(f"{path.name}:{digest}" for path, _, digest in source_records).encode()
+        "\n".join(f"{path.name}:{digest}" for path, _, digest, _ in source_records).encode()
     ).hexdigest()
     created = datetime.now(UTC)
     batch_id = f"{created.strftime('%Y-%m-%dT%H%M%SZ')}-{batch_digest[:8]}"
@@ -128,11 +129,10 @@ def prepare_production_batch(
     files: list[Path] = []
     records: list[dict[str, Any]] = []
     try:
-        for source, inspection, digest in source_records:
+        for source, inspection, digest, result in source_records:
             destination = target / source.name
             shutil.copy2(source, destination)
             files.append(destination)
-            result = next(item for item in results if item.get("xml_file") == source.name)
             records.append(
                 {
                     "xml_file": source.name,
@@ -144,8 +144,17 @@ def prepare_production_batch(
             )
 
         shutil.copy2(ledger, target / "submission-ledger-preprod-test.json")
+        excluded = [
+            {
+                "xml_file": item.get("xml_file"),
+                "status_code": item.get("status_code"),
+                "error": item.get("error"),
+                "response_body": item.get("response_body"),
+            }
+            for item in rejected_results
+        ]
         manifest = {
-            "format": "hal-assistant-production-batch-v2",
+            "format": "hal-assistant-production-batch-v3",
             "batch_id": batch_id,
             "batch_sha256": batch_digest,
             "created_at": created.isoformat(),
@@ -155,7 +164,10 @@ def prepare_production_batch(
             "test": False,
             "force_duplicate_by_title": False,
             "load_filter": payload.get("load_filter", "noaffiliation"),
+            "candidate_count": len(results),
             "file_count": len(records),
+            "excluded_count": len(excluded),
+            "excluded": excluded,
             "files": records,
         }
         manifest_path = target / "production-manifest.json"
@@ -169,6 +181,7 @@ def prepare_production_batch(
                 "created_at": manifest["created_at"],
                 "status": manifest["status"],
                 "file_count": len(records),
+                "excluded_count": len(excluded),
                 "directory": str(target),
                 "batch_sha256": batch_digest,
             },
