@@ -3,7 +3,14 @@ from pathlib import Path
 from docx import Document
 
 from hal_assistant.models import PublicationType
-from hal_assistant.parser import extract_title, normalize_centuries, parse_docx
+from hal_assistant.parser import (
+    extract_book_title,
+    extract_conference_metadata,
+    extract_journal_title,
+    extract_title,
+    normalize_centuries,
+    parse_docx,
+)
 
 
 def test_extract_quoted_title() -> None:
@@ -34,6 +41,48 @@ def test_normalize_centuries_does_not_change_ordinary_words() -> None:
     )
 
 
+def test_extract_book_title_after_editor_prefix() -> None:
+    citation = (
+        "« La faim après la faim », avant-propos in Florence Fix (éd.), "
+        "Manger et être mangé, L’alimentation et ses récits, Paris, Orizons, 2016, p.11-25."
+    )
+    assert extract_book_title(citation) == (
+        "Manger et être mangé, L’alimentation et ses récits"
+    )
+
+
+def test_extract_journal_title_from_article_citation() -> None:
+    citation = (
+        "« Le corps pétrifié », in Études Francophones, vol. 37, n°2, "
+        "Représentations du corps, automne 2024, p.1-17."
+    )
+    assert extract_journal_title(citation) == "Études Francophones"
+
+
+def test_extract_journal_title_after_issue_editor() -> None:
+    citation = (
+        "« Jeanne d’Arc », in Laurence Le Diagon-Jacquin (éd.), "
+        "Le Paon d’Héra, N°8, Dijon, 2011, p.155-164."
+    )
+    assert extract_journal_title(citation) == "Le Paon d’Héra"
+
+
+def test_extract_conference_title_city_and_country_without_inventing_date() -> None:
+    citation = (
+        "« Fragmentation », in Peter Schnyder (éd.), De l’écriture et des fragments. "
+        "Fragmentation et sciences humaines, [actes du colloque à l’Université de "
+        "Haute-Alsace, Mulhouse, 2014], Paris, Classiques Garnier, 2016, p.151-163."
+    )
+    metadata = extract_conference_metadata(citation)
+    assert metadata["conference_title"] == (
+        "De l’écriture et des fragments. Fragmentation et sciences humaines"
+    )
+    assert metadata["conference_city"] == "Mulhouse"
+    assert metadata["conference_country"] == "France"
+    assert metadata["conference_start_date"] is None
+    assert metadata["conference_year_evidence"] == "2014"
+
+
 def test_parse_docx_sections_and_metadata(tmp_path: Path) -> None:
     source = tmp_path / "sample.docx"
     document = Document()
@@ -51,6 +100,7 @@ def test_parse_docx_sections_and_metadata(tmp_path: Path) -> None:
     assert items[0].pages == "230"
     assert items[1].publication_type is PublicationType.JOURNAL_ARTICLE
     assert items[1].title == "Mon article"
+    assert items[1].journal_title == "Revue test"
     assert items[1].url == "https://example.org/a"
     assert items[1].authors == ["Florence Fix"]
 
@@ -106,6 +156,7 @@ def test_quoted_title_wins_over_later_italic_text(tmp_path: Path) -> None:
     items = parse_docx(source, default_author="Florence Fix")
 
     assert items[0].title == "Mon article"
+    assert items[0].journal_title == "Revue test"
 
 
 def test_url_only_paragraph_is_attached_to_previous_citation(tmp_path: Path) -> None:
