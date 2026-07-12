@@ -9,7 +9,10 @@ import typer
 from .conference_enrichment import export_conference_queue
 from .models import Publication
 
-app = typer.Typer(no_args_is_help=True, help="Prepare a sourced conference enrichment review queue.")
+app = typer.Typer(
+    no_args_is_help=True,
+    help="Prepare a sourced conference enrichment review queue.",
+)
 
 
 @app.command()
