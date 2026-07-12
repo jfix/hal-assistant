@@ -31,10 +31,18 @@ PUBLICATION_TYPE_TO_HAL = {
 }
 
 ALIASES: dict[str, tuple[str, ...]] = {
-    "journal_title": ("journal_title", "journal", "container_title", "journalOrBookTitle"),
+    "journal_title": (
+        "journal_title",
+        "journal",
+        "container_title",
+        "journalOrBookTitle",
+    ),
     "book_title": ("book_title", "container_title", "journalOrBookTitle"),
     "conference_title": ("conference_title", "conferenceTitle"),
-    "conference_start_date": ("conference_start_date", "conferenceStartDate"),
+    "conference_start_date": (
+        "conference_start_date",
+        "conferenceStartDate",
+    ),
     "conference_city": ("conference_city", "city"),
     "conference_country": ("conference_country", "country"),
     "year": ("year", "producedDateY"),
@@ -62,7 +70,10 @@ def resolve_hal_type(record: dict[str, Any]) -> str:
     if explicit:
         return str(explicit)
     publication_type = str(record.get("publication_type") or "")
-    return PUBLICATION_TYPE_TO_HAL.get(publication_type, publication_type.upper() or "UNKNOWN")
+    return PUBLICATION_TYPE_TO_HAL.get(
+        publication_type,
+        publication_type.upper() or "UNKNOWN",
+    )
 
 
 def field_value(record: dict[str, Any], field: str) -> Any:
@@ -72,7 +83,11 @@ def field_value(record: dict[str, Any], field: str) -> Any:
 def audit_record(record: dict[str, Any]) -> ReadinessResult:
     document_type = resolve_hal_type(record)
     requirements = HAL_TYPE_REQUIREMENTS.get(document_type, COMMON_REQUIRED_FIELDS)
-    missing = [field for field in requirements if field_value(record, field) in (None, "", [])]
+    missing = [
+        field
+        for field in requirements
+        if field_value(record, field) in (None, "", [])
+    ]
     return ReadinessResult(
         publication_id=str(record.get("publication_id") or "unknown"),
         document_type=document_type,
@@ -85,7 +100,9 @@ def audit_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     results = [audit_record(record) for record in records]
     types: dict[str, dict[str, Any]] = {}
     for document_type in sorted({result.document_type for result in results}):
-        selected = [result for result in results if result.document_type == document_type]
+        selected = [
+            result for result in results if result.document_type == document_type
+        ]
         missing_counts = Counter(
             field for result in selected for field in result.missing_required_fields
         )
