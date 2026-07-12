@@ -8,7 +8,10 @@ import typer
 
 from .hal_requirements import audit_records
 
-app = typer.Typer(add_completion=False, help="Audit normalized publications against HAL requirements.")
+app = typer.Typer(
+    add_completion=False,
+    help="Audit normalized publications against HAL requirements.",
+)
 
 
 @app.command()
@@ -23,7 +26,10 @@ def main(
     ] = None,
     show_records: Annotated[
         bool,
-        typer.Option("--show-records", help="Print blocked publication IDs and missing fields."),
+        typer.Option(
+            "--show-records",
+            help="Print blocked publication IDs and missing fields.",
+        ),
     ] = False,
 ) -> None:
     """Report which publications are HAL-ready before XML generation."""
@@ -49,11 +55,17 @@ def main(
             if record["ready"]:
                 continue
             fields = ", ".join(record["missing_required_fields"])
-            typer.echo(f"  {record['publication_id']} [{record['document_type']}]: {fields}")
+            typer.echo(
+                f"  {record['publication_id']} "
+                f"[{record['document_type']}]: {fields}"
+            )
 
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
+        output.write_text(
+            json.dumps(audit, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         typer.echo(f"Audit: {output}")
 
     if audit["blocked"]:
