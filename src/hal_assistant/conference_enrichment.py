@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 
-from .models import Publication, PublicationType
+from .models import (
+    EnrichmentConfidence,
+    MetadataEvidence,
+    Publication,
+    PublicationType,
+)
 
 REQUIRED_COMM_FIELDS = (
     "conference_title",
@@ -14,6 +20,14 @@ REQUIRED_COMM_FIELDS = (
     "conference_city",
     "conference_country",
 )
+REVIEW_FIELDS = (
+    "conference_title",
+    "conference_start_date",
+    "conference_end_date",
+    "conference_city",
+    "conference_country",
+)
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def conference_enrichment_queue(
@@ -158,3 +172,118 @@ def export_conference_queue(
     workbook_path = output / "conference-enrichment-review.xlsx"
     workbook.save(workbook_path)
     return json_path, workbook_path
+
+
+def _review_rows(workbook_path: str | Path) -> list[dict[str, object]]:
+    workbook = load_workbook(workbook_path, data_only=True)
+    if "COMM review" not in workbook.sheetnames:
+        raise ValueError("Review workbook has no 'COMM review' sheet")
+    sheet = workbook["COMM review"]
+    headers = [cell.value for cell in sheet[1]]
+    required_headers = {
+        "publication_id",
+        "source_url",
+        "source_name",
+        "confidence",
+        "review_status",
+        *REVIEW_FIELDS,
+    }
+    missing_headers = required_headers.difference(headers)
+    if missing_headers:
+        raise ValueError(f"Review workbook is missing columns: {sorted(missing_headers)}")
+    return [dict(zip(headers, values, strict=True)) for values in sheet.iter_rows(min_row=2, values_only=True)]
+
+
+def import_conference_reviews(
+    publications: list[Publication], workbook_path: str | Path
+) -> tuple[list[Publication], list[str]]:
+    """Apply accepted sourced reviews by stable publication ID.
+
+    Only accepted rows are applied. Exact dates must use ISO YYYY-MM-DD, and every
+    changed field receives a provenance record. Existing non-empty values may only
+    be replaced when the accepted workbook row supplies a different sourced value.
+    """
+    by_id = {item.publication_id: item for item in publications}
+    errors: list[str] = []
+    seen_ids: set[str] = set()
+
+    for row_number, row in enumerate(_review_rows(workbook_path), start=2):
+        status = str(row.get("review_status") or "").strip().casefold()
+        if status != "accepted":
+            continue
+        publication_id = str(row.get("publication_id") or "").strip()
+        if not publication_id:
+            errors.append(f"row {row_number}: missing publication_id")
+            continue
+        if publication_id in seen_ids:
+            errors.append(f"row {row_number}: duplicate accepted publication_id {publication_id}")
+            continue
+        seen_ids.add(publication_id)
+        publication = by_id.get(publication_id)
+        if publication is None:
+            errors.append(f"row {row_number}: unknown publication_id {publication_id}")
+            continue
+        if publication.publication_type is not PublicationType.CONFERENCE_PAPER:
+            errors.append(f"row {row_number}: {publication_id} is not a COMM record")
+            continue
+
+        source_url = str(row.get("source_url") or "").strip()
+        source_name = str(row.get("source_name") or "").strip()
+        confidence_raw = str(row.get("confidence") or "").strip().casefold()
+        note = str(row.get("review_note") or "").strip() or None
+        if not source_url or not source_name:
+            errors.append(f"row {row_number}: accepted review requires source_url and source_name")
+            continue
+        try:
+            confidence = EnrichmentConfidence(confidence_raw)
+        except ValueError:
+            errors.append(f"row {row_number}: confidence must be high, medium, or low")
+            continue
+
+        proposed: dict[str, str] = {}
+        row_errors: list[str] = []
+        for field in REVIEW_FIELDS:
+            value = str(row.get(field) or "").strip()
+            if not value:
+                continue
+            if field in {"conference_start_date", "conference_end_date"} and not ISO_DATE_RE.fullmatch(value):
+                row_errors.append(f"{field} must use YYYY-MM-DD")
+            else:
+                proposed[field] = value
+        if row_errors:
+            errors.append(f"row {row_number}: {'; '.join(row_errors)}")
+            continue
+        if not proposed:
+            errors.append(f"row {row_number}: accepted review contains no conference metadata")
+            continue
+
+        for field, value in proposed.items():
+            if getattr(publication, field) == value:
+                continue
+            setattr(publication, field, value)
+            publication.metadata_evidence.append(
+                MetadataEvidence(
+                    field=field,
+                    value=value,
+                    source_url=source_url,
+                    source_name=source_name,
+                    confidence=confidence,
+                    note=note,
+                )
+            )
+
+    return publications, errors
+
+
+def export_imported_publications(publications: list[Publication], path: str | Path) -> Path:
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(
+            [item.model_dump(mode="json") for item in publications],
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return output
