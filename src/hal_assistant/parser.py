@@ -214,6 +214,8 @@ def extract_conference_metadata(citation: str) -> dict[str, str | None]:
             country = city_match.group("country")
             if country:
                 country = normalize_text(country).strip(" .")
+                if YEAR_RE.fullmatch(country):
+                    country = None
         if city and not country:
             country = COUNTRY_BY_CITY.get(city)
 
