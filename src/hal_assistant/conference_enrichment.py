@@ -16,7 +16,9 @@ REQUIRED_COMM_FIELDS = (
 )
 
 
-def conference_enrichment_queue(publications: list[Publication]) -> list[dict[str, object]]:
+def conference_enrichment_queue(
+    publications: list[Publication],
+) -> list[dict[str, object]]:
     """Build a deterministic research queue without fabricating missing dates."""
     queue: list[dict[str, object]] = []
     for item in publications:
@@ -62,7 +64,10 @@ def export_conference_queue(
     queue = conference_enrichment_queue(publications)
 
     json_path = output / "conference-enrichment-queue.json"
-    json_path.write_text(json.dumps(queue, ensure_ascii=False, indent=2), encoding="utf-8")
+    json_path.write_text(
+        json.dumps(queue, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     workbook = Workbook()
     sheet = workbook.active
@@ -133,10 +138,18 @@ def export_conference_queue(
 
     instructions = workbook.create_sheet("Instructions")
     instructions.append(["Rule", "Description"])
-    instructions.append(["Dates", "Use exact source dates only; never convert a bare year to 1 January."])
-    instructions.append(["Sources", "Prefer Fabula.org, then official programmes and conference PDFs."])
-    instructions.append(["Confidence", "Use high, medium, or low and explain ambiguity in review_note."])
-    instructions.append(["Decision", "Set review_status to accepted, rejected, or needs_review."])
+    instructions.append(
+        ["Dates", "Use exact source dates only; never convert a bare year to 1 January."]
+    )
+    instructions.append(
+        ["Sources", "Prefer Fabula.org, then official programmes and conference PDFs."]
+    )
+    instructions.append(
+        ["Confidence", "Use high, medium, or low and explain ambiguity in review_note."]
+    )
+    instructions.append(
+        ["Decision", "Set review_status to accepted, rejected, or needs_review."]
+    )
     for cell in instructions[1]:
         cell.font = Font(bold=True)
     instructions.column_dimensions["A"].width = 20
