@@ -190,8 +190,11 @@ def _review_rows(workbook_path: str | Path) -> list[dict[str, object]]:
     }
     missing_headers = required_headers.difference(headers)
     if missing_headers:
-        raise ValueError(f"Review workbook is missing columns: {sorted(missing_headers)}")
-    return [dict(zip(headers, values, strict=True)) for values in sheet.iter_rows(min_row=2, values_only=True)]
+        raise ValueError(
+            f"Review workbook is missing columns: {sorted(missing_headers)}"
+        )
+    rows = sheet.iter_rows(min_row=2, values_only=True)
+    return [dict(zip(headers, values, strict=True)) for values in rows]
 
 
 def import_conference_reviews(
@@ -216,7 +219,10 @@ def import_conference_reviews(
             errors.append(f"row {row_number}: missing publication_id")
             continue
         if publication_id in seen_ids:
-            errors.append(f"row {row_number}: duplicate accepted publication_id {publication_id}")
+            errors.append(
+                f"row {row_number}: duplicate accepted publication_id "
+                f"{publication_id}"
+            )
             continue
         seen_ids.add(publication_id)
         publication = by_id.get(publication_id)
@@ -232,12 +238,17 @@ def import_conference_reviews(
         confidence_raw = str(row.get("confidence") or "").strip().casefold()
         note = str(row.get("review_note") or "").strip() or None
         if not source_url or not source_name:
-            errors.append(f"row {row_number}: accepted review requires source_url and source_name")
+            errors.append(
+                f"row {row_number}: accepted review requires source_url "
+                "and source_name"
+            )
             continue
         try:
             confidence = EnrichmentConfidence(confidence_raw)
         except ValueError:
-            errors.append(f"row {row_number}: confidence must be high, medium, or low")
+            errors.append(
+                f"row {row_number}: confidence must be high, medium, or low"
+            )
             continue
 
         proposed: dict[str, str] = {}
@@ -246,7 +257,11 @@ def import_conference_reviews(
             value = str(row.get(field) or "").strip()
             if not value:
                 continue
-            if field in {"conference_start_date", "conference_end_date"} and not ISO_DATE_RE.fullmatch(value):
+            is_date = field in {
+                "conference_start_date",
+                "conference_end_date",
+            }
+            if is_date and not ISO_DATE_RE.fullmatch(value):
                 row_errors.append(f"{field} must use YYYY-MM-DD")
             else:
                 proposed[field] = value
@@ -254,7 +269,10 @@ def import_conference_reviews(
             errors.append(f"row {row_number}: {'; '.join(row_errors)}")
             continue
         if not proposed:
-            errors.append(f"row {row_number}: accepted review contains no conference metadata")
+            errors.append(
+                f"row {row_number}: accepted review contains no "
+                "conference metadata"
+            )
             continue
 
         for field, value in proposed.items():
@@ -275,7 +293,9 @@ def import_conference_reviews(
     return publications, errors
 
 
-def export_imported_publications(publications: list[Publication], path: str | Path) -> Path:
+def export_imported_publications(
+    publications: list[Publication], path: str | Path
+) -> Path:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
