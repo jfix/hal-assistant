@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import re
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PublicationType(StrEnum):
@@ -32,6 +34,21 @@ class HALReadinessStatus(StrEnum):
     PRODUCTION_SUBMITTED = "production_submitted"
 
 
+class EnrichmentConfidence(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class MetadataEvidence(BaseModel):
+    field: str
+    value: str
+    source_url: str
+    source_name: str
+    confidence: EnrichmentConfidence
+    note: str | None = None
+
+
 class HALMatch(BaseModel):
     status: HALMatchStatus
     hal_id: str | None = None
@@ -57,7 +74,25 @@ class Enrichment(BaseModel):
     error: str | None = None
 
 
+def stable_publication_id(
+    publication_type: PublicationType,
+    title: str,
+    raw_citation: str,
+) -> str:
+    """Return a reproducible identifier independent of paragraph order and output paths."""
+    normalized = "|".join(
+        (
+            publication_type.value,
+            re.sub(r"\s+", " ", title).strip().casefold(),
+            re.sub(r"\s+", " ", raw_citation).strip().casefold(),
+        )
+    )
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    return f"pub-{digest}"
+
+
 class Publication(BaseModel):
+    publication_id: str | None = None
     publication_type: PublicationType
     section: str
     raw_citation: str
@@ -88,8 +123,19 @@ class Publication(BaseModel):
     conference_city: str | None = None
     conference_country: str | None = None
     conference_country_code: str | None = None
+    metadata_evidence: list[MetadataEvidence] = Field(default_factory=list)
 
     hal_readiness: HALReadinessStatus = HALReadinessStatus.PARSED
     missing_required_fields: list[str] = Field(default_factory=list)
     hal_match: HALMatch | None = None
     enrichment: Enrichment | None = None
+
+    @model_validator(mode="after")
+    def ensure_publication_id(self) -> Publication:
+        if not self.publication_id:
+            self.publication_id = stable_publication_id(
+                self.publication_type,
+                self.title,
+                self.raw_citation,
+            )
+        return self
