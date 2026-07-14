@@ -51,6 +51,31 @@ def test_extract_book_title_after_editor_prefix() -> None:
     )
 
 
+def test_parse_mariette_chapter_with_corrected_2017_year(tmp_path: Path) -> None:
+    source = tmp_path / "mariette.docx"
+    document = Document()
+    document.add_paragraph("Chapitre d’ouvrage")
+    document.add_paragraph(
+        "« Mariette, texte de Sacha Guitry, musique d’Oscar Straus, l’histoire "
+        "‘dans le genre de Joséphine’ », in Fedora Wesseler et Stefan Schmidl (éd.), "
+        "Oscar Straus, Annäherungen an einen zu Unrecht Vergessenen, New Academic "
+        "Essays on A Mostly Forgotten Composer, Amsterdam, "
+        "http://operetta-research-center.org/oscar-straus-essays/, 2017, p.98-107."
+    )
+    document.save(source)
+
+    items = parse_docx(source, default_author="Florence Fix")
+
+    assert len(items) == 1
+    assert items[0].title.startswith("Mariette, texte de Sacha Guitry")
+    assert items[0].year == 2017
+    assert items[0].pages == "98-107"
+    assert items[0].book_title == (
+        "Oscar Straus, Annäherungen an einen zu Unrecht Vergessenen, "
+        "New Academic Essays on A Mostly Forgotten Composer"
+    )
+
+
 def test_extract_journal_title_from_article_citation() -> None:
     citation = (
         "« Le corps pétrifié », in Études Francophones, vol. 37, n°2, "
