@@ -40,9 +40,7 @@ def test_build_tei_contains_mandatory_hal_metadata() -> None:
     assert root.findtext(".//tei:analytic/tei:title", namespaces=ns) == (
         "Un article sur le XIXe siècle"
     )
-    assert root.findtext(".//tei:author/tei:idno[@type='idhal']", namespaces=ns) == (
-        "florence-fix"
-    )
+    assert root.findtext(".//tei:author/tei:idno[@type='idhal']", namespaces=ns) == ("florence-fix")
     assert root.find(".//tei:classCode[@scheme='halDomain'][@n='shs.litt']", ns) is not None
     assert root.find(".//tei:classCode[@scheme='halTypology'][@n='ART']", ns) is not None
     assert root.findtext(".//tei:biblScope[@unit='issue']", namespaces=ns) == "8"
@@ -62,6 +60,46 @@ def test_publication_identifiers_are_children_of_bibl_struct() -> None:
     assert bibl_struct.findtext("tei:idno[@type='isbn']", namespaces=ns) == "978-2-406-18678-6"
     assert bibl_struct.findtext("tei:idno[@type='issn']", namespaces=ns) == "1234-5678"
     assert bibl_struct.find("tei:monogr/tei:idno", ns) is None
+    children = list(bibl_struct)
+    assert children.index(bibl_struct.find("tei:monogr", ns)) < children.index(
+        bibl_struct.find("tei:idno[@type='doi']", ns)
+    )
+
+
+def test_aofr_orders_bibliographic_scopes_before_publication_date() -> None:
+    root = build_tei(sample_record(), domain="shs.litt").getroot()
+    ns = {"tei": TEI_NS}
+    imprint = root.find(".//tei:imprint", ns)
+    assert imprint is not None
+    children = list(imprint)
+    assert children.index(imprint.find("tei:biblScope", ns)) < children.index(
+        imprint.find("tei:date[@type='datePub']", ns)
+    )
+
+
+def test_local_validation_rejects_aofr_element_ordering_errors() -> None:
+    tree = build_tei(sample_record(), domain="shs.litt")
+    root = tree.getroot()
+    ns = {"tei": TEI_NS}
+    bibl_struct = root.find(".//tei:biblStruct", ns)
+    monogr = root.find(".//tei:biblStruct/tei:monogr", ns)
+    doi = root.find(".//tei:biblStruct/tei:idno[@type='doi']", ns)
+    imprint = root.find(".//tei:imprint", ns)
+    date = root.find(".//tei:imprint/tei:date[@type='datePub']", ns)
+    assert bibl_struct is not None and monogr is not None and doi is not None
+    assert imprint is not None and date is not None
+
+    bibl_struct.remove(doi)
+    bibl_struct.insert(list(bibl_struct).index(monogr), doi)
+    imprint.remove(date)
+    first_scope = next(
+        index for index, child in enumerate(imprint) if child.tag == f"{{{TEI_NS}}}biblScope"
+    )
+    imprint.insert(first_scope, date)
+
+    errors = validate_tei(tree)
+    assert "AOfr requires publication identifiers after monogr" in errors
+    assert "AOfr requires biblScope before publication date" in errors
 
 
 def test_build_tei_requires_domain() -> None:
@@ -108,9 +146,7 @@ def test_douv_serializes_as_monograph_title() -> None:
     }
     root = build_tei(record, domain="shs.litt").getroot()
     ns = {"tei": TEI_NS}
-    assert root.findtext(".//tei:monogr/tei:title[@level='m']", namespaces=ns) == (
-        "Ouvrage dirigé"
-    )
+    assert root.findtext(".//tei:monogr/tei:title[@level='m']", namespaces=ns) == ("Ouvrage dirigé")
 
 
 def test_comm_serializes_required_meeting_metadata() -> None:
@@ -129,12 +165,8 @@ def test_comm_serializes_required_meeting_metadata() -> None:
     root = tree.getroot()
     ns = {"tei": TEI_NS}
     assert root.findtext(".//tei:meeting/tei:title", namespaces=ns) == "Colloque test"
-    assert root.findtext(
-        ".//tei:meeting/tei:date[@type='start']", namespaces=ns
-    ) == "2024-05-02"
-    assert root.findtext(
-        ".//tei:meeting/tei:date[@type='end']", namespaces=ns
-    ) == "2024-05-03"
+    assert root.findtext(".//tei:meeting/tei:date[@type='start']", namespaces=ns) == "2024-05-02"
+    assert root.findtext(".//tei:meeting/tei:date[@type='end']", namespaces=ns) == "2024-05-03"
     country = root.find(".//tei:meeting/tei:country", ns)
     assert country is not None
     assert country.attrib["key"] == "FR"

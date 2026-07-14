@@ -205,6 +205,8 @@ def build_tei(
 
     imprint = ET.SubElement(monogr, _tag("imprint"))
     _text(imprint, "publisher", _first(record, "publisher"))
+    # AOfr requires all biblScope elements before publication dates.
+    # ElementTree preserves insertion order, so keep this sequence explicit.
     _text(imprint, "biblScope", _first(record, "volume"), unit="volume")
     _text(imprint, "biblScope", _first(record, "issue"), unit="issue")
     _text(imprint, "biblScope", _first(record, "pages"), unit="pp")
@@ -247,6 +249,21 @@ def validate_tei(tree: ET.ElementTree) -> list[str]:
     for label, path in required_paths.items():
         if root.find(path, ns) is None:
             errors.append(f"Missing {label}")
+
+    # These ordering constraints come from the AOfr schema and are stricter
+    # than ordinary XML well-formedness. Catch them locally before X-test.
+    for bibl_struct in root.findall(".//tei:biblStruct", ns):
+        children = list(bibl_struct)
+        monogr_indexes = [i for i, child in enumerate(children) if child.tag == _tag("monogr")]
+        idno_indexes = [i for i, child in enumerate(children) if child.tag == _tag("idno")]
+        if monogr_indexes and idno_indexes and min(idno_indexes) < max(monogr_indexes):
+            errors.append("AOfr requires publication identifiers after monogr")
+    for imprint in root.findall(".//tei:imprint", ns):
+        children = list(imprint)
+        date_indexes = [i for i, child in enumerate(children) if child.tag == _tag("date")]
+        scope_indexes = [i for i, child in enumerate(children) if child.tag == _tag("biblScope")]
+        if date_indexes and scope_indexes and min(date_indexes) < max(scope_indexes):
+            errors.append("AOfr requires biblScope before publication date")
     typology = root.find(".//tei:classCode[@scheme='halTypology']", ns)
     if typology is not None and typology.attrib.get("n") == "COMM":
         meeting_paths = {
