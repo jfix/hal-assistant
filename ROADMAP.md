@@ -40,7 +40,7 @@ This roadmap is ordered by dependency. A phase is complete only when its tests p
 - [x] Reconcile local production ledgers before preparing a new batch.
 - [x] Exclude records already accepted in earlier production runs.
 - [ ] Match by title, year, container, issue and pages before classifying a duplicate.
-- [ ] Add a per-publication override for verified HAL title-only false positives.
+- [x] Add a per-publication override for verified HAL title-only false positives.
 - [ ] Revalidate and submit the three quarantined *Le Paon d'Héra* issues independently.
 - [ ] Resolve the quarantined generic `Introduction` and `Préface` records independently.
 - [ ] Resolve the remaining ambiguous HAL matches before generating submission XML.
