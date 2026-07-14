@@ -102,6 +102,12 @@ def normalize_centuries(value: str) -> str:
     return CENTURY_RE.sub(lambda match: f"{match.group(1).upper()}e", normalized)
 
 
+def extract_publication_years(citation: str) -> list[int]:
+    """Return year candidates from bibliographic text, never from URLs."""
+    citation_without_urls = URL_RE.sub("", citation)
+    return [int(match.group(1)) for match in YEAR_RE.finditer(citation_without_urls)]
+
+
 def extract_title(citation: str, formatted_title: str | None = None) -> str:
     citation = citation.strip()
     title: str | None = None
@@ -239,7 +245,7 @@ def parse_citation(
     default_author: str | None,
     formatted_title: str | None = None,
 ) -> Publication:
-    years = [int(match.group(1)) for match in YEAR_RE.finditer(citation)]
+    years = extract_publication_years(citation)
     page_match = PAGES_RE.search(citation)
     url_match = URL_RE.search(citation)
     metadata: dict[str, object] = {}

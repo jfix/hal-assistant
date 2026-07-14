@@ -7,10 +7,27 @@ from hal_assistant.parser import (
     extract_book_title,
     extract_conference_metadata,
     extract_journal_title,
+    extract_publication_years,
     extract_title,
     normalize_centuries,
     parse_docx,
 )
+
+
+def test_year_extraction_ignores_four_digit_url_path() -> None:
+    citation = (
+        "Bjørnstjerne Bjørnson hors frontières, Publications numériques du CEREdI, "
+        "n°35, 2025, https://publis-shs.univ-rouen.fr/ceredi/2052.html"
+    )
+    assert extract_publication_years(citation) == [2025]
+
+
+def test_year_extraction_keeps_year_after_url() -> None:
+    citation = (
+        "Oscar Straus, http://operetta-research-center.org/essays/2011/, "
+        "Amsterdam, 2017, p.98-107."
+    )
+    assert extract_publication_years(citation) == [2017]
 
 
 def test_extract_quoted_title() -> None:
