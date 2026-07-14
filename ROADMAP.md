@@ -34,8 +34,8 @@ This roadmap is ordered by dependency. A phase is complete only when its tests p
 
 ## Phase 4 — Source corrections and release
 
-- [ ] Import the corrected Mariette citation when the revised DOCX is supplied.
-- [ ] Add a regression test for the corrected citation and year.
+- [x] Import the corrected Mariette citation when the revised DOCX is supplied.
+- [x] Add a regression test for the corrected citation and year.
 - [ ] Refresh user documentation and examples.
 - [ ] Bump the release version and publish release notes.
 - [ ] Delete merged feature branches after all dependent PRs are complete.
