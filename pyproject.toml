@@ -30,6 +30,7 @@ hal-diagnose = "hal_assistant.diagnose_cli:app"
 hal-prepare-production = "hal_assistant.production_cli:app"
 hal-build-xml = "hal_assistant.build_cli:app"
 hal-submit = "hal_assistant.submit_cli:app"
+hal-update = "hal_assistant.update_cli:app"
 hal-audit = "hal_assistant.audit_cli:app"
 
 [tool.hatch.build.targets.wheel]
