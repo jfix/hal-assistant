@@ -356,6 +356,36 @@ def test_generic_front_matter_uses_book_title_and_strips_author(tmp_path: Path) 
     )
 
 
+def test_long_chapter_citation_does_not_leak_into_title_or_container(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "long-chapter.docx"
+    document = Document()
+    document.add_paragraph("Chapitre d’ouvrage")
+    document.add_paragraph(
+        "« Bougresses et vierges rouges : représentations des femmes de la "
+        "Commune de Paris », in Muriel Plana et Florence Fix (dir.), "
+        "Présences et représentations des corps de femmes dans la littérature "
+        "et les arts. Reproduction, jouissance, pouvoir, Dijon, EUD, "
+        "« Écritures », 2023, p.35-47."
+    )
+    document.save(source)
+
+    item = parse_docx(source, default_author="Florence Fix")[0]
+
+    assert item.title == (
+        "Bougresses et vierges rouges : représentations des femmes de la "
+        "Commune de Paris"
+    )
+    assert item.book_title == (
+        "Présences et représentations des corps de femmes dans la littérature "
+        "et les arts. Reproduction, jouissance, pouvoir"
+    )
+    assert item.editors == ["Muriel Plana", "Florence Fix"]
+    assert item.publisher == "EUD"
+    assert item.publisher_city == "Dijon"
+
+
 def test_journal_issue_parts_are_kept_only_for_repeated_themes(tmp_path: Path) -> None:
     source = tmp_path / "issues.docx"
     document = Document()
