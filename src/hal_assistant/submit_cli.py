@@ -53,6 +53,16 @@ def submit(
             help="Reuse the stage ledger and skip notices already accepted.",
         ),
     ] = False,
+    force_title_duplicate: Annotated[
+        str | None,
+        typer.Option(
+            "--force-title-duplicate",
+            help=(
+                "Retry exactly one verified HAL title-only false positive by XML basename. "
+                "Production writes require a matching forced production X-test checksum."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Process each XML notice independently and write a cumulative ledger."""
     try:
@@ -65,6 +75,7 @@ def submit(
             limit=limit,
             fail_fast=fail_fast,
             resume=resume,
+            force_title_duplicate=force_title_duplicate,
         )
     except (RuntimeError, ValueError) as exc:
         typer.echo(f"Refused: {exc}", err=True)
