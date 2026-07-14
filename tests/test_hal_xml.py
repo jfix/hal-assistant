@@ -49,6 +49,21 @@ def test_build_tei_contains_mandatory_hal_metadata() -> None:
     assert root.findtext(".//tei:idno[@type='doi']", namespaces=ns) == "10.1234/example"
 
 
+def test_publication_identifiers_are_children_of_bibl_struct() -> None:
+    record = sample_record() | {
+        "isbn": "978-2-406-18678-6",
+        "issn": "1234-5678",
+    }
+    root = build_tei(record, domain="shs.litt").getroot()
+    ns = {"tei": TEI_NS}
+    bibl_struct = root.find(".//tei:biblStruct", ns)
+    assert bibl_struct is not None
+    assert bibl_struct.findtext("tei:idno[@type='doi']", namespaces=ns) == "10.1234/example"
+    assert bibl_struct.findtext("tei:idno[@type='isbn']", namespaces=ns) == "978-2-406-18678-6"
+    assert bibl_struct.findtext("tei:idno[@type='issn']", namespaces=ns) == "1234-5678"
+    assert bibl_struct.find("tei:monogr/tei:idno", ns) is None
+
+
 def test_build_tei_requires_domain() -> None:
     with pytest.raises(ValueError, match="domain"):
         build_tei(sample_record(), domain="")

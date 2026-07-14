@@ -182,9 +182,9 @@ def build_tei(
     for doi in _identifier_values(_first(record, "doi")):
         _text(bibl_struct, "idno", doi, type="doi")
     for isbn in _identifier_values(_first(record, "isbn")):
-        _text(monogr, "idno", isbn, type="isbn")
+        _text(bibl_struct, "idno", isbn, type="isbn")
     for issn in _identifier_values(_first(record, "issn")):
-        _text(monogr, "idno", issn, type="issn")
+        _text(bibl_struct, "idno", issn, type="issn")
 
     imprint = ET.SubElement(monogr, _tag("imprint"))
     _text(imprint, "publisher", _first(record, "publisher"))
