@@ -66,7 +66,8 @@ def _sheet_path(archive: zipfile.ZipFile, sheet_name: str) -> str:
     for sheet in workbook.findall(f".//{{{SHEET_NS}}}sheet"):
         if sheet.attrib.get("name") == sheet_name:
             target = targets[sheet.attrib[f"{{{REL_NS}}}id"]]
-            return target if target.startswith("xl/") else f"xl/{target.lstrip('/')}"
+            normalized = target.lstrip("/")
+            return normalized if normalized.startswith("xl/") else f"xl/{normalized}"
     raise ValueError(f"Workbook has no sheet named {sheet_name!r}")
 
 

@@ -98,6 +98,40 @@ def test_douv_serializes_as_monograph_title() -> None:
     )
 
 
+def test_comm_serializes_required_meeting_metadata() -> None:
+    record = sample_record() | {
+        "document_type": "COMM",
+        "conference_title": "Colloque test",
+        "conference_start_date": "2024-05-02",
+        "conference_end_date": "2024-05-03",
+        "conference_city": "Rouen",
+        "conference_country": "France",
+        "conference_country_code": "fr",
+    }
+    tree = build_tei(record, domain="shs.litt")
+    assert validate_tei(tree) == []
+
+    root = tree.getroot()
+    ns = {"tei": TEI_NS}
+    assert root.findtext(".//tei:meeting/tei:title", namespaces=ns) == "Colloque test"
+    assert root.findtext(
+        ".//tei:meeting/tei:date[@type='start']", namespaces=ns
+    ) == "2024-05-02"
+    assert root.findtext(
+        ".//tei:meeting/tei:date[@type='end']", namespaces=ns
+    ) == "2024-05-03"
+    country = root.find(".//tei:meeting/tei:country", ns)
+    assert country is not None
+    assert country.attrib["key"] == "FR"
+
+
+def test_comm_validation_blocks_missing_meeting_metadata() -> None:
+    record = sample_record() | {"document_type": "COMM"}
+    errors = validate_tei(build_tei(record, domain="shs.litt"))
+    assert "Missing conference title" in errors
+    assert "Missing conference end date" in errors
+
+
 def test_build_xml_batch_writes_manifest_and_well_formed_xml(tmp_path: Path) -> None:
     source = tmp_path / "records.json"
     source.write_text(json.dumps([sample_record()]), encoding="utf-8")
