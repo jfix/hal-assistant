@@ -147,6 +147,22 @@ def test_comm_validation_blocks_missing_meeting_metadata() -> None:
     assert "Missing conference end date" in errors
 
 
+def test_comm_serializes_french_conference_place_names() -> None:
+    record = sample_record() | {
+        "document_type": "COMM",
+        "conference_title": "Colloque test",
+        "conference_start_date": "2024-05-02",
+        "conference_end_date": "2024-05-03",
+        "conference_city": "Vienna",
+        "conference_country": "Austria",
+        "conference_country_code": "at",
+    }
+    root = build_tei(record, domain="shs.litt").getroot()
+    ns = {"tei": TEI_NS}
+    assert root.findtext(".//tei:meeting/tei:settlement", namespaces=ns) == "Vienne"
+    assert root.findtext(".//tei:meeting/tei:country", namespaces=ns) == "Autriche"
+
+
 def test_build_xml_batch_writes_manifest_and_well_formed_xml(tmp_path: Path) -> None:
     source = tmp_path / "records.json"
     source.write_text(json.dumps([sample_record()]), encoding="utf-8")

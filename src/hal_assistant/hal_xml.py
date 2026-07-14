@@ -18,6 +18,13 @@ ET.register_namespace("", TEI_NS)
 ET.register_namespace("hal", HAL_NS)
 ET.register_namespace("xsi", XSI_NS)
 
+FRENCH_CONFERENCE_CITIES = {
+    "Granada": "Grenade",
+    "Santa Maria, Azores": "Santa Maria, Açores",
+    "Vienna": "Vienne",
+}
+FRENCH_COUNTRIES = {"Austria": "Autriche", "Spain": "Espagne"}
+
 
 def _tag(name: str) -> str:
     return f"{{{TEI_NS}}}{name}"
@@ -165,17 +172,27 @@ def build_tei(
             _first(record, "conference_end_date", "conferenceEndDate"),
             type="end",
         )
-        _text(meeting, "settlement", _first(record, "conference_city", "city"))
+        conference_city = _first(record, "conference_city", "city")
+        if conference_city:
+            conference_city = FRENCH_CONFERENCE_CITIES.get(
+                str(conference_city), str(conference_city)
+            )
+        _text(meeting, "settlement", conference_city)
         country_code = _first(
             record,
             "conference_country_code",
             "conferenceCountryCode",
         )
         country_attributes = {"key": str(country_code).upper()} if country_code else {}
+        conference_country = _first(record, "conference_country", "country")
+        if conference_country:
+            conference_country = FRENCH_COUNTRIES.get(
+                str(conference_country), str(conference_country)
+            )
         _text(
             meeting,
             "country",
-            _first(record, "conference_country", "country"),
+            conference_country,
             **country_attributes,
         )
 

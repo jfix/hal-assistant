@@ -125,6 +125,16 @@ def test_extract_conference_title_city_and_country_without_inventing_date() -> N
     assert metadata["conference_year_evidence"] == "2014"
 
 
+def test_conference_locations_are_normalized_to_french() -> None:
+    citation = (
+        "« Article », in Livre, [actes du colloque à l’Université Exemple, Vienna, "
+        "Austria], Paris, Éditeur, 2024."
+    )
+    metadata = extract_conference_metadata(citation)
+    assert metadata["conference_city"] == "Vienne"
+    assert metadata["conference_country"] == "Autriche"
+
+
 def test_extract_conference_container_editors_and_publisher() -> None:
     citation = (
         "« Fragmentation », in Peter Schnyder et Frédérique Toudoire-Surlapierre "

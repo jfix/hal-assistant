@@ -70,6 +70,12 @@ COUNTRY_BY_CITY = {
     "Valence": "Espagne",
     "Vienne": "Autriche",
 }
+FRENCH_CONFERENCE_CITIES = {
+    "Granada": "Grenade",
+    "Santa Maria, Azores": "Santa Maria, Açores",
+    "Vienna": "Vienne",
+}
+FRENCH_COUNTRIES = {"Austria": "Autriche", "Spain": "Espagne"}
 PUBLICATION_CITY_MARKERS = (
     "Paris",
     "Dijon",
@@ -425,9 +431,11 @@ def extract_conference_metadata(citation: str) -> dict[str, str | None]:
         city_match = CONFERENCE_CITY_RE.search(note)
         if city_match:
             city = normalize_text(city_match.group("city")).strip(" .")
+            city = FRENCH_CONFERENCE_CITIES.get(city, city)
             country = city_match.group("country")
             if country:
                 country = normalize_text(country).strip(" .")
+                country = FRENCH_COUNTRIES.get(country, country)
                 if YEAR_RE.fullmatch(country):
                     country = None
         if city and not country:
