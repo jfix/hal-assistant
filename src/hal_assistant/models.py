@@ -48,6 +48,11 @@ class Enrichment(BaseModel):
     source: str
     score: float = 0.0
     canonical_title: str | None = None
+    container_title: str | None = None
+    pages: str | None = None
+    work_type: str | None = None
+    suggested_publication_type: PublicationType | None = None
+    type_review_reason: str | None = None
     doi: str | None = None
     journal: str | None = None
     publisher: str | None = None
