@@ -24,7 +24,15 @@ CENTURY_RE = re.compile(
     r"\b([ivxlcdm]+)e(?=(?:\s+siècles?\b|\s*[-–—]\s*[ivxlcdm]+e\s+siècles?\b))",
     re.IGNORECASE,
 )
-LE_PAON_RE = re.compile(r"Le Paon d[’']Héra\s+(\d+)$", re.IGNORECASE)
+LE_PAON_RE = re.compile(
+    r"Le Paon d[’']Héra\s+(\d+)(?:\s*,.*)?$",
+    re.IGNORECASE,
+)
+LE_PAON_HAL_JOURNAL_ID = "63383"
+LE_PAON_CANONICAL_TITLE = (
+    "Le Paon d'Héra : gazette interdisciplinaire thématique internationale = "
+    "Hera's Peacock: an international thematic interdisciplinary journal"
+)
 
 
 @dataclass(frozen=True)
@@ -138,7 +146,10 @@ def _structure_le_paon(record: dict[str, Any]) -> bool:
         citation,
         re.IGNORECASE,
     )
-    record["container_title"] = "Le Paon d’Héra"
+    record["journal_title"] = record.get("journal_title") or LE_PAON_CANONICAL_TITLE
+    record["container_title"] = record["journal_title"]
+    record["journal_id"] = LE_PAON_HAL_JOURNAL_ID
+    record["journal_status"] = "VALID"
     record["issue"] = match.group(1)
     record["thematic_title"] = thematic.group(1).strip() if thematic else None
     return True

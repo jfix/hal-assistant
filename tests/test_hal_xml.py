@@ -163,6 +163,11 @@ def test_review_mapping_preserves_douv_and_container_titles(tmp_path: Path) -> N
                     "title": "Article",
                     "journal_title": "Revue test",
                 },
+                {
+                    "publication_type": "journal_issue",
+                    "title": "Numéro thématique",
+                    "journal_title": "Revue test",
+                },
             ]
         ),
         encoding="utf-8",
@@ -173,6 +178,8 @@ def test_review_mapping_preserves_douv_and_container_titles(tmp_path: Path) -> N
     assert records[0]["document_type"] == "DOUV"
     assert records[1]["container_title"] == "Livre collectif"
     assert records[2]["container_title"] == "Revue test"
+    assert records[3]["document_type"] == "DOUV"
+    assert records[3]["container_title"] == "Revue test"
 
 
 def test_douv_serializes_as_monograph_title() -> None:

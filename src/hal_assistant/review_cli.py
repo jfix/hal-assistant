@@ -36,7 +36,9 @@ def add_hal_document_types(path: Path) -> list[dict[str, Any]]:
                 f"{publication_type or '<blank>'}"
             )
         record["document_type"] = document_type
-        if document_type == "COUV":
+        if publication_type == "journal_issue":
+            record["container_title"] = record.get("journal_title")
+        elif document_type == "COUV":
             record["container_title"] = record.get("book_title")
         elif document_type == "ART":
             record["container_title"] = record.get("journal_title")
