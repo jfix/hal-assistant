@@ -146,6 +146,12 @@ def _french_quoted_title_end(value: str) -> int | None:
     return None
 
 
+def extract_publication_years(citation: str) -> list[int]:
+    """Return year candidates from bibliographic text, never from URLs."""
+    citation_without_urls = URL_RE.sub("", citation)
+    return [int(match.group(1)) for match in YEAR_RE.finditer(citation_without_urls)]
+
+
 def extract_title(citation: str, formatted_title: str | None = None) -> str:
     citation = citation.strip()
     title: str | None = None
@@ -475,10 +481,7 @@ def parse_citation(
     default_author: str | None,
     formatted_title: str | None = None,
 ) -> Publication:
-    years = [
-        int(match.group(1))
-        for match in YEAR_RE.finditer(_citation_without_urls(citation))
-    ]
+    years = extract_publication_years(citation)
     page_matches = list(PAGES_RE.finditer(citation))
     page_match = page_matches[-1] if page_matches else None
     url_match = URL_RE.search(citation)

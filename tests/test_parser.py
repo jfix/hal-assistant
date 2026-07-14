@@ -11,11 +11,28 @@ from hal_assistant.parser import (
     extract_journal_issue,
     extract_publisher_metadata,
     extract_journal_title,
+    extract_publication_years,
     extract_title,
     normalize_centuries,
     parse_citation,
     parse_docx,
 )
+
+
+def test_year_extraction_ignores_four_digit_url_path() -> None:
+    citation = (
+        "Bjørnstjerne Bjørnson hors frontières, Publications numériques du CEREdI, "
+        "n°35, 2025, https://publis-shs.univ-rouen.fr/ceredi/2052.html"
+    )
+    assert extract_publication_years(citation) == [2025]
+
+
+def test_year_extraction_keeps_year_after_url() -> None:
+    citation = (
+        "Oscar Straus, http://operetta-research-center.org/essays/2011/, "
+        "Amsterdam, 2017, p.98-107."
+    )
+    assert extract_publication_years(citation) == [2017]
 
 
 def test_extract_quoted_title() -> None:
@@ -108,6 +125,31 @@ def test_extract_book_title_after_editor_prefix() -> None:
     )
     assert extract_book_title(citation) == (
         "Manger et être mangé, L’alimentation et ses récits"
+    )
+
+
+def test_parse_mariette_chapter_with_corrected_2017_year(tmp_path: Path) -> None:
+    source = tmp_path / "mariette.docx"
+    document = Document()
+    document.add_paragraph("Chapitre d’ouvrage")
+    document.add_paragraph(
+        "« Mariette, texte de Sacha Guitry, musique d’Oscar Straus, l’histoire "
+        "‘dans le genre de Joséphine’ », in Fedora Wesseler et Stefan Schmidl (éd.), "
+        "Oscar Straus, Annäherungen an einen zu Unrecht Vergessenen, New Academic "
+        "Essays on A Mostly Forgotten Composer, Amsterdam, "
+        "http://operetta-research-center.org/oscar-straus-essays/, 2017, p.98-107."
+    )
+    document.save(source)
+
+    items = parse_docx(source, default_author="Florence Fix")
+
+    assert len(items) == 1
+    assert items[0].title.startswith("Mariette, texte de Sacha Guitry")
+    assert items[0].year == 2017
+    assert items[0].pages == "98-107"
+    assert items[0].book_title == (
+        "Oscar Straus, Annäherungen an einen zu Unrecht Vergessenen, "
+        "New Academic Essays on A Mostly Forgotten Composer"
     )
 
 
