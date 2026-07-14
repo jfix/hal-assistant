@@ -145,9 +145,9 @@ def build_tei(
     monogr = ET.SubElement(bibl_struct, _tag("monogr"))
     container = _first(record, "journalOrBookTitle", "container_title", "journal")
     if container:
-        level = "m" if str(document_type) in {"OUV", "COUV"} else "j"
+        level = "m" if str(document_type) in {"OUV", "DOUV", "COUV"} else "j"
         _text(monogr, "title", container, level=level)
-    elif str(document_type) == "OUV":
+    elif str(document_type) in {"OUV", "DOUV"}:
         _text(monogr, "title", title, level="m")
 
     for doi in _identifier_values(_first(record, "doi")):

@@ -14,10 +14,12 @@ HAL_TYPE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     + (
         "conference_title",
         "conference_start_date",
+        "conference_end_date",
         "conference_city",
         "conference_country",
     ),
     "OUV": COMMON_REQUIRED_FIELDS,
+    "DOUV": COMMON_REQUIRED_FIELDS,
 }
 
 PUBLICATION_TYPE_TO_HAL = {
@@ -42,6 +44,10 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "conference_start_date": (
         "conference_start_date",
         "conferenceStartDate",
+    ),
+    "conference_end_date": (
+        "conference_end_date",
+        "conferenceEndDate",
     ),
     "conference_city": ("conference_city", "city"),
     "conference_country": ("conference_country", "country"),

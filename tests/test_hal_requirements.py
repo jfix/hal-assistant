@@ -35,9 +35,14 @@ def test_comm_requires_conference_metadata() -> None:
     assert result.missing_required_fields == [
         "conference_title",
         "conference_start_date",
+        "conference_end_date",
         "conference_city",
         "conference_country",
     ]
+
+
+def test_douv_uses_common_required_fields() -> None:
+    assert audit_record(_base("DOUV")).ready is True
 
 
 def test_audit_summary_groups_missing_fields() -> None:

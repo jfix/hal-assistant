@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from hal_assistant.hal_xml import TEI_NS, build_tei, build_xml_batch, validate_tei
+from hal_assistant.review_cli import add_hal_document_types
 from hal_assistant.sword import submit_batch
 
 
@@ -51,6 +52,50 @@ def test_build_tei_contains_mandatory_hal_metadata() -> None:
 def test_build_tei_requires_domain() -> None:
     with pytest.raises(ValueError, match="domain"):
         build_tei(sample_record(), domain="")
+
+
+def test_review_mapping_preserves_douv_and_container_titles(tmp_path: Path) -> None:
+    path = tmp_path / "records.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "publication_type": "edited_book",
+                    "title": "Livre dirigé",
+                },
+                {
+                    "publication_type": "book_chapter",
+                    "title": "Chapitre",
+                    "book_title": "Livre collectif",
+                },
+                {
+                    "publication_type": "journal_article",
+                    "title": "Article",
+                    "journal_title": "Revue test",
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    records = add_hal_document_types(path)
+
+    assert records[0]["document_type"] == "DOUV"
+    assert records[1]["container_title"] == "Livre collectif"
+    assert records[2]["container_title"] == "Revue test"
+
+
+def test_douv_serializes_as_monograph_title() -> None:
+    record = sample_record() | {
+        "document_type": "DOUV",
+        "title": "Ouvrage dirigé",
+        "container_title": None,
+    }
+    root = build_tei(record, domain="shs.litt").getroot()
+    ns = {"tei": TEI_NS}
+    assert root.findtext(".//tei:monogr/tei:title[@level='m']", namespaces=ns) == (
+        "Ouvrage dirigé"
+    )
 
 
 def test_build_xml_batch_writes_manifest_and_well_formed_xml(tmp_path: Path) -> None:
