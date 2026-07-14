@@ -18,6 +18,13 @@ ET.register_namespace("", TEI_NS)
 ET.register_namespace("hal", HAL_NS)
 ET.register_namespace("xsi", XSI_NS)
 
+FRENCH_CONFERENCE_CITIES = {
+    "Granada": "Grenade",
+    "Santa Maria, Azores": "Santa Maria, Açores",
+    "Vienna": "Vienne",
+}
+FRENCH_COUNTRIES = {"Austria": "Autriche", "Spain": "Espagne"}
+
 
 def _tag(name: str) -> str:
     return f"{{{TEI_NS}}}{name}"
@@ -150,6 +157,45 @@ def build_tei(
     elif str(document_type) == "OUV":
         _text(monogr, "title", title, level="m")
 
+    if str(document_type) == "COMM":
+        meeting = ET.SubElement(monogr, _tag("meeting"))
+        _text(meeting, "title", _first(record, "conference_title", "conferenceTitle"))
+        _text(
+            meeting,
+            "date",
+            _first(record, "conference_start_date", "conferenceStartDate"),
+            type="start",
+        )
+        _text(
+            meeting,
+            "date",
+            _first(record, "conference_end_date", "conferenceEndDate"),
+            type="end",
+        )
+        conference_city = _first(record, "conference_city", "city")
+        if conference_city:
+            conference_city = FRENCH_CONFERENCE_CITIES.get(
+                str(conference_city), str(conference_city)
+            )
+        _text(meeting, "settlement", conference_city)
+        country_code = _first(
+            record,
+            "conference_country_code",
+            "conferenceCountryCode",
+        )
+        country_attributes = {"key": str(country_code).upper()} if country_code else {}
+        conference_country = _first(record, "conference_country", "country")
+        if conference_country:
+            conference_country = FRENCH_COUNTRIES.get(
+                str(conference_country), str(conference_country)
+            )
+        _text(
+            meeting,
+            "country",
+            conference_country,
+            **country_attributes,
+        )
+
     for doi in _identifier_values(_first(record, "doi")):
         _text(bibl_struct, "idno", doi, type="doi")
     for isbn in _identifier_values(_first(record, "isbn")):
@@ -201,6 +247,19 @@ def validate_tei(tree: ET.ElementTree) -> list[str]:
     for label, path in required_paths.items():
         if root.find(path, ns) is None:
             errors.append(f"Missing {label}")
+
+    typology = root.find(".//tei:classCode[@scheme='halTypology']", ns)
+    if typology is not None and typology.attrib.get("n") == "COMM":
+        meeting_paths = {
+            "conference title": ".//tei:meeting/tei:title",
+            "conference start date": ".//tei:meeting/tei:date[@type='start']",
+            "conference end date": ".//tei:meeting/tei:date[@type='end']",
+            "conference city": ".//tei:meeting/tei:settlement",
+            "conference country": ".//tei:meeting/tei:country",
+        }
+        for label, path in meeting_paths.items():
+            if root.find(path, ns) is None:
+                errors.append(f"Missing {label}")
     return errors
 
 
