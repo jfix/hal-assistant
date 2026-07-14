@@ -64,6 +64,33 @@ uv run hal-prepare-production output/hal-xml
 
 Do not treat a successful preproduction test as production authorization. Production also requires `--no-test`, `--execute`, and `HAL_SWORD_CONFIRM_PRODUCTION=SUBMIT_TO_HAL`. Preserve the generated ledgers and production archive because they are the authoritative idempotency and duplicate-safety record.
 
+### Verified title-only duplicate false positives
+
+HAL can reject distinct records that share a short top-level title. Retry such a record only after checking its title, year, container, issue, and pages against HAL production. The override accepts one exact XML basename and first requires a successful checksum-matched X-test against the production endpoint:
+
+```bash
+uv run hal-submit output/hal-archive/BATCH_ID \
+  --environment production \
+  --test \
+  --resume \
+  --force-title-duplicate pub-0017.xml
+```
+
+For the real write, confirm both production submission and that same exact filename:
+
+```bash
+export HAL_SWORD_CONFIRM_PRODUCTION=SUBMIT_TO_HAL
+export HAL_SWORD_CONFIRM_TITLE_DUPLICATE=pub-0017.xml
+uv run hal-submit output/hal-archive/BATCH_ID \
+  --environment production \
+  --no-test \
+  --execute \
+  --resume \
+  --force-title-duplicate pub-0017.xml
+```
+
+The tool refuses paths, wildcards, multi-record forcing, a changed XML checksum, and a production write without the matching forced production X-test. Process each verified false positive independently.
+
 See [the 2026-07-14 production reconciliation](docs/production-run-2026-07-14.md) for the latest sanitized operational result.
 
 ## Recognized sections
