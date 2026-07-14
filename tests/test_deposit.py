@@ -42,12 +42,20 @@ def test_complete_enriched_record_is_ready() -> None:
         canonical_title="Mon article",
         doi="10.1234/example",
         journal="Revue test",
+        journal_id="12345",
+        journal_status="VALID",
+        issue="8",
+        issue_title="Issue theme",
         issn=["1234-5678"],
     )
     plan = build_deposit_plan(item, 1)
     assert plan.status is DepositStatus.READY
     assert plan.payload["docType"] == "ART"
     assert plan.payload["doi"] == "10.1234/example"
+    assert plan.payload["journalId"] == "12345"
+    assert plan.payload["journalStatus"] == "VALID"
+    assert plan.payload["issue"] == "8"
+    assert plan.payload["issueTitle"] == "Issue theme"
 
 
 def test_missing_year_blocks_deposit() -> None:

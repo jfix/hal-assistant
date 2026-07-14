@@ -45,6 +45,10 @@ VOLUME_MARKER_RE = re.compile(
     r",\s*(?=(?:vol\.?\s*\d+|n[°o]\s*\w+|\d+/\d{4}|(?:19|20)\d{2}\b))",
     re.IGNORECASE,
 )
+JOURNAL_ISSUE_MARKER_RE = re.compile(
+    r"(?:^|,|\s)\s*n[°o]\s*(?P<issue>\d+)\b",
+    re.IGNORECASE,
+)
 CONFERENCE_NOTE_RE = re.compile(r"\[(?P<note>[^\]]+)\]")
 CONFERENCE_CITY_RE = re.compile(
     r"(?:Université|université|INHA|séminaire|colloque|journée(?:s)? d[’']études?)"
@@ -403,12 +407,22 @@ def extract_book_title(citation: str) -> str | None:
 
 def extract_journal_title(citation: str) -> str | None:
     tail = ARTICLE_PREFIX_RE.sub("", _after_quoted_title(citation), count=1).strip()
-    tail = _strip_editor_prefix(tail)
     match = VOLUME_MARKER_RE.search(tail)
     if match:
         tail = tail[: match.start()]
+    # An issue editor can appear after the journal title, while a publication
+    # editor can appear before it. Isolate the pre-volume segment first so a
+    # later ``(éd.)``/``(dir.)`` cannot erase the real journal title.
+    tail = _strip_editor_prefix(tail)
     tail = _before_publication_city(tail)
     return normalize_centuries(tail.strip(" ,")) or None
+
+
+def extract_journal_issue(citation: str) -> str | None:
+    """Extract an explicit journal issue without treating years or URLs as issues."""
+    tail = ARTICLE_PREFIX_RE.sub("", _after_quoted_title(citation), count=1).strip()
+    match = JOURNAL_ISSUE_MARKER_RE.search(tail)
+    return match.group("issue") if match else None
 
 
 def extract_conference_metadata(citation: str) -> dict[str, str | None]:
@@ -488,6 +502,8 @@ def parse_citation(
             metadata["book_title"] = _clean_container_title(metadata["book_title"])
     elif publication_type is PublicationType.JOURNAL_ARTICLE:
         metadata["journal_title"] = extract_journal_title(citation)
+        if issue := extract_journal_issue(citation):
+            metadata["issue"] = issue
     elif publication_type is PublicationType.CONFERENCE_PAPER:
         conference = extract_conference_metadata(citation)
         metadata.update(

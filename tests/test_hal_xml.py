@@ -49,8 +49,12 @@ def test_build_tei_contains_mandatory_hal_metadata() -> None:
 
 def test_publication_identifiers_use_aofr_container_levels() -> None:
     record = sample_record() | {
+        "journalId": "88663",
+        "journalStatus": "VALID",
         "isbn": "978-2-406-18678-6",
         "issn": "1234-5678",
+        "eissn": "8765-4321",
+        "issueTitle": "Issue theme",
     }
     root = build_tei(record, domain="shs.litt").getroot()
     ns = {"tei": TEI_NS}
@@ -62,6 +66,15 @@ def test_publication_identifiers_use_aofr_container_levels() -> None:
         == "978-2-406-18678-6"
     )
     assert bibl_struct.findtext("tei:monogr/tei:idno[@type='issn']", namespaces=ns) == "1234-5678"
+    assert bibl_struct.findtext("tei:monogr/tei:idno[@type='eissn']", namespaces=ns) == "8765-4321"
+    journal_id = bibl_struct.find("tei:monogr/tei:idno[@type='halJournalId']", ns)
+    assert journal_id is not None
+    assert journal_id.text == "88663"
+    assert journal_id.attrib["status"] == "VALID"
+    assert (
+        bibl_struct.findtext("tei:monogr/tei:imprint/tei:biblScope[@unit='serie']", namespaces=ns)
+        == "Issue theme"
+    )
     assert bibl_struct.find("tei:idno[@type='isbn']", ns) is None
     assert bibl_struct.find("tei:idno[@type='issn']", ns) is None
     children = list(bibl_struct)

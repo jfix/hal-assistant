@@ -79,6 +79,13 @@ def build_deposit_plan(publication: Publication, index: int) -> DepositPlan:
         warnings.append("No external metadata enrichment available")
     elif enrichment.score < 80:
         warnings.append(f"Low-confidence enrichment score: {enrichment.score}")
+    if (
+        publication.publication_type is PublicationType.JOURNAL_ARTICLE
+        and enrichment
+        and enrichment.validation_notes
+        and enrichment.journal_status != "VALID"
+    ):
+        warnings.extend(enrichment.validation_notes)
 
     payload: dict[str, object] = {
         "title": _canonical_title(publication),
@@ -89,8 +96,14 @@ def build_deposit_plan(publication: Publication, index: int) -> DepositPlan:
         "pages": publication.pages,
         "doi": _identifier(publication, "doi"),
         "journal": _identifier(publication, "journal"),
+        "journalId": _identifier(publication, "journal_id"),
+        "journalStatus": _identifier(publication, "journal_status"),
+        "volume": _identifier(publication, "volume") or publication.volume,
+        "issue": _identifier(publication, "issue") or publication.issue,
+        "issueTitle": _identifier(publication, "issue_title"),
         "publisher": _identifier(publication, "publisher"),
-        "issn": _identifier(publication, "issn") or [],
+        "issn": _identifier(publication, "issn") or publication.issn,
+        "eissn": _identifier(publication, "eissn") or [],
         "isbn": _identifier(publication, "isbn") or [],
         "sourceUrl": publication.url,
         "rawCitation": publication.raw_citation,

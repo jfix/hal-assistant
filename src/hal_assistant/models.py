@@ -55,9 +55,18 @@ class Enrichment(BaseModel):
     type_review_reason: str | None = None
     doi: str | None = None
     journal: str | None = None
+    journal_id: str | None = None
+    journal_status: str | None = None
+    journal_authority_score: float = 0.0
+    volume: str | None = None
+    issue: str | None = None
+    issue_title: str | None = None
     publisher: str | None = None
     issn: list[str] = Field(default_factory=list)
+    eissn: list[str] = Field(default_factory=list)
     isbn: list[str] = Field(default_factory=list)
+    metadata_sources: list[str] = Field(default_factory=list)
+    validation_notes: list[str] = Field(default_factory=list)
     url: str | None = None
     error: str | None = None
 

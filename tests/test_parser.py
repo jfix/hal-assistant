@@ -8,6 +8,7 @@ from hal_assistant.parser import (
     extract_book_title,
     extract_conference_metadata,
     extract_editors,
+    extract_journal_issue,
     extract_publisher_metadata,
     extract_journal_title,
     extract_title,
@@ -30,6 +31,23 @@ def test_extract_title_with_nested_french_guillemets() -> None:
         extract_title(citation)
         == "Qu’est-ce qu’un « mauvais » théâtre de science-fiction (avant 1920) ?"
     )
+
+
+def test_extract_journal_issue_ignores_years_and_urls() -> None:
+    citation = (
+        "« Qu’est-ce qu’un « mauvais » théâtre de science-fiction (avant 1920) ? », "
+        "in Res Futurae, n°18, 2021. En ligne : https://journals.openedition.org/resf/"
+    )
+    assert extract_journal_issue(citation) == "18"
+    publication = parse_citation(
+        citation,
+        "Article dans revue",
+        PublicationType.JOURNAL_ARTICLE,
+        1,
+        "Florence Fix",
+    )
+    assert publication.journal_title == "Res Futurae"
+    assert publication.issue == "18"
 
 
 def test_quoted_title_stops_before_later_quoted_collection() -> None:

@@ -153,10 +153,21 @@ def build_tei(
     # AOfr models ISBN/ISSN as identifiers of the containing monograph or
     # journal. HAL accepts them at biblStruct level but silently discards them
     # during normalization, so serialize them inside monogr before its title.
+    journal_id = _first(record, "journalId", "journal_id")
+    if journal_id:
+        _text(
+            monogr,
+            "idno",
+            journal_id,
+            type="halJournalId",
+            status=str(_first(record, "journalStatus", "journal_status") or "VALID"),
+        )
     for isbn in _identifier_values(_first(record, "isbn")):
         _text(monogr, "idno", isbn, type="isbn")
     for issn in _identifier_values(_first(record, "issn")):
         _text(monogr, "idno", issn, type="issn")
+    for eissn in _identifier_values(_first(record, "eissn")):
+        _text(monogr, "idno", eissn, type="eissn")
     container = _first(record, "journalOrBookTitle", "container_title", "journal")
     if container:
         level = "m" if str(document_type) in {"OUV", "DOUV", "COUV"} else "j"
@@ -210,6 +221,12 @@ def build_tei(
     _text(imprint, "publisher", _first(record, "publisher"))
     # AOfr requires all biblScope elements before publication dates.
     # ElementTree preserves insertion order, so keep this sequence explicit.
+    _text(
+        imprint,
+        "biblScope",
+        _first(record, "issueTitle", "issue_title"),
+        unit="serie",
+    )
     _text(imprint, "biblScope", _first(record, "volume"), unit="volume")
     _text(imprint, "biblScope", _first(record, "issue"), unit="issue")
     _text(imprint, "biblScope", _first(record, "pages"), unit="pp")
