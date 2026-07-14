@@ -150,6 +150,13 @@ def build_tei(
             ET.SubElement(author, _tag("affiliation"), {"ref": f"#struct-{resolved_structure_id}"})
 
     monogr = ET.SubElement(bibl_struct, _tag("monogr"))
+    # AOfr models ISBN/ISSN as identifiers of the containing monograph or
+    # journal. HAL accepts them at biblStruct level but silently discards them
+    # during normalization, so serialize them inside monogr before its title.
+    for isbn in _identifier_values(_first(record, "isbn")):
+        _text(monogr, "idno", isbn, type="isbn")
+    for issn in _identifier_values(_first(record, "issn")):
+        _text(monogr, "idno", issn, type="issn")
     container = _first(record, "journalOrBookTitle", "container_title", "journal")
     if container:
         level = "m" if str(document_type) in {"OUV", "DOUV", "COUV"} else "j"
@@ -198,10 +205,6 @@ def build_tei(
 
     for doi in _identifier_values(_first(record, "doi")):
         _text(bibl_struct, "idno", doi, type="doi")
-    for isbn in _identifier_values(_first(record, "isbn")):
-        _text(bibl_struct, "idno", isbn, type="isbn")
-    for issn in _identifier_values(_first(record, "issn")):
-        _text(bibl_struct, "idno", issn, type="issn")
 
     imprint = ET.SubElement(monogr, _tag("imprint"))
     _text(imprint, "publisher", _first(record, "publisher"))
@@ -258,6 +261,29 @@ def validate_tei(tree: ET.ElementTree) -> list[str]:
         idno_indexes = [i for i, child in enumerate(children) if child.tag == _tag("idno")]
         if monogr_indexes and idno_indexes and min(idno_indexes) < max(monogr_indexes):
             errors.append("AOfr requires publication identifiers after monogr")
+        if any(
+            child.tag == _tag("idno") and child.attrib.get("type") in {"isbn", "issn"}
+            for child in children
+        ):
+            errors.append("AOfr requires ISBN and ISSN identifiers inside monogr")
+    for monogr in root.findall(".//tei:biblStruct/tei:monogr", ns):
+        children = list(monogr)
+        identifier_indexes = [
+            i
+            for i, child in enumerate(children)
+            if child.tag == _tag("idno") and child.attrib.get("type") in {"isbn", "issn"}
+        ]
+        content_indexes = [
+            i
+            for i, child in enumerate(children)
+            if child.tag in {_tag("title"), _tag("meeting"), _tag("editor"), _tag("imprint")}
+        ]
+        if (
+            identifier_indexes
+            and content_indexes
+            and max(identifier_indexes) > min(content_indexes)
+        ):
+            errors.append("AOfr requires monograph identifiers before monograph content")
     for imprint in root.findall(".//tei:imprint", ns):
         children = list(imprint)
         date_indexes = [i for i, child in enumerate(children) if child.tag == _tag("date")]

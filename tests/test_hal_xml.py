@@ -47,7 +47,7 @@ def test_build_tei_contains_mandatory_hal_metadata() -> None:
     assert root.findtext(".//tei:idno[@type='doi']", namespaces=ns) == "10.1234/example"
 
 
-def test_publication_identifiers_are_children_of_bibl_struct() -> None:
+def test_publication_identifiers_use_aofr_container_levels() -> None:
     record = sample_record() | {
         "isbn": "978-2-406-18678-6",
         "issn": "1234-5678",
@@ -57,12 +57,22 @@ def test_publication_identifiers_are_children_of_bibl_struct() -> None:
     bibl_struct = root.find(".//tei:biblStruct", ns)
     assert bibl_struct is not None
     assert bibl_struct.findtext("tei:idno[@type='doi']", namespaces=ns) == "10.1234/example"
-    assert bibl_struct.findtext("tei:idno[@type='isbn']", namespaces=ns) == "978-2-406-18678-6"
-    assert bibl_struct.findtext("tei:idno[@type='issn']", namespaces=ns) == "1234-5678"
-    assert bibl_struct.find("tei:monogr/tei:idno", ns) is None
+    assert (
+        bibl_struct.findtext("tei:monogr/tei:idno[@type='isbn']", namespaces=ns)
+        == "978-2-406-18678-6"
+    )
+    assert bibl_struct.findtext("tei:monogr/tei:idno[@type='issn']", namespaces=ns) == "1234-5678"
+    assert bibl_struct.find("tei:idno[@type='isbn']", ns) is None
+    assert bibl_struct.find("tei:idno[@type='issn']", ns) is None
     children = list(bibl_struct)
     assert children.index(bibl_struct.find("tei:monogr", ns)) < children.index(
         bibl_struct.find("tei:idno[@type='doi']", ns)
+    )
+    monogr = bibl_struct.find("tei:monogr", ns)
+    assert monogr is not None
+    monogr_children = list(monogr)
+    assert monogr_children.index(monogr.find("tei:idno[@type='isbn']", ns)) < (
+        monogr_children.index(monogr.find("tei:title", ns))
     )
 
 
@@ -100,6 +110,20 @@ def test_local_validation_rejects_aofr_element_ordering_errors() -> None:
     errors = validate_tei(tree)
     assert "AOfr requires publication identifiers after monogr" in errors
     assert "AOfr requires biblScope before publication date" in errors
+
+
+def test_local_validation_rejects_isbn_at_bibl_struct_level() -> None:
+    tree = build_tei(sample_record() | {"isbn": "978-2-406-18678-6"}, domain="shs.litt")
+    root = tree.getroot()
+    ns = {"tei": TEI_NS}
+    bibl_struct = root.find(".//tei:biblStruct", ns)
+    monogr = root.find(".//tei:biblStruct/tei:monogr", ns)
+    isbn = root.find(".//tei:monogr/tei:idno[@type='isbn']", ns)
+    assert bibl_struct is not None and monogr is not None and isbn is not None
+    monogr.remove(isbn)
+    bibl_struct.append(isbn)
+
+    assert "AOfr requires ISBN and ISSN identifiers inside monogr" in validate_tei(tree)
 
 
 def test_build_tei_requires_domain() -> None:
