@@ -6,11 +6,12 @@ from difflib import SequenceMatcher
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from .hal import normalize
+from .hal import normalize, solr_phrase
 from .models import Enrichment, Publication, PublicationType
 
 CROSSREF_URL = "https://api.crossref.org/works"
 OPENALEX_URL = "https://api.openalex.org/works"
+HAL_JOURNAL_REF_URL = "https://api.archives-ouvertes.fr/ref/journal/"
 USER_AGENT = "hal-assistant/0.3 (mailto:hal-assistant@example.invalid)"
 
 
@@ -18,6 +19,12 @@ def _first(value: object) -> str | None:
     if isinstance(value, list):
         return str(value[0]) if value else None
     return str(value) if value else None
+
+
+def _values(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if item]
+    return [str(value)] if value else []
 
 
 def _score(publication: Publication, title: str | None, year: int | None) -> float:
@@ -217,6 +224,162 @@ def enrich_openalex(
     return best or Enrichment(source="openalex")
 
 
+def _journal_authority_score(
+    publication: Publication,
+    enrichment: Enrichment,
+    candidate: dict[str, object],
+) -> tuple[float, bool]:
+    expected_titles = [publication.journal_title] if publication.journal_title else []
+    if enrichment.score >= 80 and enrichment.journal:
+        expected_titles.append(enrichment.journal)
+    candidate_title = _first(candidate.get("title_s")) or ""
+    title_score = max(
+        (
+            SequenceMatcher(None, normalize(value), normalize(candidate_title)).ratio()
+            for value in expected_titles
+        ),
+        default=0.0,
+    )
+
+    expected_issn = (
+        {
+            normalize(value)
+            for value in [*enrichment.issn, *enrichment.eissn]
+            if value
+        }
+        if enrichment.score >= 80
+        else set()
+    )
+    candidate_issn = {
+        normalize(value)
+        for value in [
+            *_values(candidate.get("issn_s")),
+            *_values(candidate.get("eissn_s")),
+        ]
+        if value
+    }
+    identifier_match = bool(expected_issn & candidate_issn)
+    if expected_issn:
+        score = title_score * 30 + (70 if identifier_match else 0)
+    else:
+        score = title_score * 100
+    return round(score, 1), identifier_match
+
+
+def _journal_authority_candidates(
+    publication: Publication,
+    enrichment: Enrichment,
+    opener: Callable[..., object],
+    timeout: float,
+) -> tuple[list[dict[str, object]], str | None]:
+    identifiers = (
+        list(dict.fromkeys([*enrichment.issn, *enrichment.eissn]))
+        if enrichment.score >= 80
+        else []
+    )
+    if identifiers:
+        clauses = [
+            (
+                f'(issn_s:"{solr_phrase(value)}" '
+                f'OR eissn_s:"{solr_phrase(value)}")'
+            )
+            for value in identifiers
+        ]
+        query = " OR ".join(clauses)
+    else:
+        title = publication.journal_title
+        if not title and enrichment.score >= 80:
+            title = enrichment.journal
+        if not title:
+            return [], None
+        query = f'title_t:"{solr_phrase(title)}"'
+
+    params = {
+        "q": query,
+        "fl": "docid,title_s,issn_s,eissn_s,publisher_s,valid_s",
+        "rows": 50,
+        "wt": "json",
+    }
+    url = f"{HAL_JOURNAL_REF_URL}?{urlencode(params)}"
+    payload = _get_json(url, opener, timeout)
+    response = payload.get("response")
+    docs = response.get("docs", []) if isinstance(response, dict) else []
+    return [item for item in docs if isinstance(item, dict)], url
+
+
+def validate_journal_authority(
+    publication: Publication,
+    enrichment: Enrichment,
+    opener: Callable[..., object] = urlopen,
+    timeout: float = 20.0,
+) -> Enrichment:
+    """Resolve a journal article against a unique VALID HAL authority.
+
+    High-confidence ISSNs may corroborate the match. Low-confidence external
+    identifiers are ignored so they cannot redirect a record to an unrelated
+    journal. Title-only matches require a near-exact, unambiguous authority.
+    """
+    if publication.publication_type is not PublicationType.JOURNAL_ARTICLE:
+        return enrichment
+
+    try:
+        candidates, authority_url = _journal_authority_candidates(
+            publication,
+            enrichment,
+            opener,
+            timeout,
+        )
+        scored: list[tuple[float, bool, dict[str, object]]] = []
+        for candidate in candidates:
+            if _first(candidate.get("valid_s")) != "VALID":
+                continue
+            score, identifier_match = _journal_authority_score(
+                publication,
+                enrichment,
+                candidate,
+            )
+            scored.append((score, identifier_match, candidate))
+        scored.sort(key=lambda item: item[0], reverse=True)
+
+        if not scored:
+            enrichment.validation_notes.append(
+                "No high-confidence VALID HAL journal authority found"
+            )
+            return enrichment
+
+        best_score, identifier_match, best = scored[0]
+        minimum_score = 80.0 if identifier_match else 95.0
+        if best_score < minimum_score:
+            enrichment.validation_notes.append(
+                "No high-confidence VALID HAL journal authority found"
+            )
+            return enrichment
+        if len(scored) > 1 and scored[1][0] >= best_score - 2:
+            enrichment.validation_notes.append(
+                "Ambiguous HAL journal authority candidates require human review"
+            )
+            return enrichment
+
+        enrichment.journal_id = str(best["docid"])
+        enrichment.journal_status = "VALID"
+        enrichment.journal_authority_score = best_score
+        enrichment.journal = _first(best.get("title_s")) or enrichment.journal
+        enrichment.publisher = _first(best.get("publisher_s")) or enrichment.publisher
+        enrichment.issn = _values(best.get("issn_s")) or enrichment.issn
+        enrichment.eissn = _values(best.get("eissn_s")) or enrichment.eissn
+        if authority_url and authority_url not in enrichment.metadata_sources:
+            enrichment.metadata_sources.append(authority_url)
+        enrichment.validation_notes.append(
+            f"Validated against HAL journal authority {enrichment.journal_id}"
+        )
+        return enrichment
+    except Exception as exc:
+        enrichment.validation_notes.append(
+            f"HAL journal authority validation unavailable: {exc}"
+        )
+        return enrichment
+
+
 def enrich_publication(
     publication: Publication,
     opener: Callable[..., object] = urlopen,
@@ -224,9 +387,11 @@ def enrich_publication(
     try:
         crossref = enrich_crossref(publication, opener=opener)
         if crossref.score >= 80:
-            return crossref
-        openalex = enrich_openalex(publication, opener=opener)
-        return openalex if openalex.score > crossref.score else crossref
+            best = crossref
+        else:
+            openalex = enrich_openalex(publication, opener=opener)
+            best = openalex if openalex.score > crossref.score else crossref
+        return validate_journal_authority(publication, best, opener=opener)
     except Exception as exc:
         return Enrichment(source="error", error=str(exc))
 
