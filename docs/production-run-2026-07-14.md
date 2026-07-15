@@ -39,21 +39,41 @@ Seven additional reviewed records were accepted in HAL production after metadata
 
 This raises the confirmed production acceptances from the submission workflow from 61 to 68. The user-maintained review sheet records all seven as `accepted` and `READY`. The ignored local archive and immutable ledgers remain authoritative for payload checksums, server diagnostics and safe resume behavior.
 
-## Quarantined production rejections
+## Current exact submission queue — 2026-07-15
 
-HAL's title-only duplicate protection rejected three distinct journal issues titled *Le Paon d'Héra* after other issues with the same top-level title had been accepted earlier in the batch:
+The latest review sheet now has **24 unsubmitted records marked `READY` with their earlier false-positive HAL candidates resolved**. They are frozen by publication ID in [`next-hal-submission-approval-2026-07-15.txt`](next-hal-submission-approval-2026-07-15.txt). The allowlist contains:
 
-- *Le Paon d'Héra* 1, *Orphée* (1), 2006
-- *Le Paon d'Héra* 2, *Orphée* (2), 2007
-- *Le Paon d'Héra* 6, *Médée* (2), 2010
+- 17 `COUV` or `ART` records, including the previously generic `Introduction`, `Avant-propos` and `Préface` contributions;
+- 7 `COMM` records with exact event titles, start/end dates, cities, countries and source evidence.
 
-They must not be retried with batch-wide duplicate forcing. A future retry requires an explicit per-record override after checking title, year, issue and pagination against HAL production.
+The exact allowlist deliberately excludes all production acceptances, all existing HAL records, the two isolated journal-issue retries below, and the unresolved issue-identity conflict. Import it with:
 
-## Remaining blocked work
+```bash
+uv run hal-review-import import-review HAL-publication-review.xlsx \
+  --approval-file docs/next-hal-submission-approval-2026-07-15.txt
+```
 
-- Five generic `Introduction` or `Préface` records require individual duplicate resolution.
-- Eleven ambiguous HAL matches require manual resolution.
-- Seventeen unmatched conference records require authoritative event metadata before XML generation.
-- Conference dates must not be inferred from publication years or bare event years.
+The resulting 24-record `hal-ready.json` must still pass local audit, XML validation and HAL preproduction before the production archive is frozen. Production must resume from the authoritative local ledgers so none of the 68 already accepted workflow records can be resubmitted.
 
-The ignored local archive and its ledgers remain the operational source of truth for checksums, response diagnostics, accepted HAL identifiers and safe resume behavior.
+## Isolated *Le Paon d’Héra* retries
+
+Two of the three original production rejections are now metadata-complete and can be regenerated for a fresh preproduction test:
+
+- `pub-c942e73d52beb710` — issue 1, *Orphée* (1), 2006, 134 pages;
+- `pub-d9c53490466289d4` — issue 6, *Médée* (2), 2010, 219 pages.
+
+Both now carry HAL journal authority `63383`, canonical journal metadata and ISSN `1779-2746`. They must not be included in the normal 24-record batch. If preproduction succeeds but the production X-test still reports only HAL's title-level duplicate rule, retry each exact XML file independently through the checksum-gated `--force-title-duplicate` workflow.
+
+## Remaining identity conflict
+
+*Le Paon d’Héra* issues 2 and 3 remain quarantined:
+
+- Florence's issue 2 citation is *Orphée* (2), 2007, 226 pages;
+- Florence's issue 3 citation is *Roméo et Juliette*, 2007, 275 pages;
+- live record `hal-05691824` currently identifies issue 2/*Orphée* but retains 275 pages, which correspond to issue 3.
+
+Preserve `hal-05691824` in the audit history, but do not submit, remap or update either issue until the 226/275-page identity discrepancy is resolved from authoritative evidence.
+
+## Remaining operational dependency
+
+The bibliographic and duplicate-review backlog is otherwise reconciled. Executing the 24-record preproduction/production batch and the two isolated journal retries still requires the ignored local review workbook, XML/archive ledgers and HAL credentials. Those artifacts remain the operational source of truth for checksums, response diagnostics, accepted HAL identifiers and safe resume behavior.

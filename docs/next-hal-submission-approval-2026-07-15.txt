@@ -1,0 +1,28 @@
+# Exact publication IDs approved for the next normal HAL submission batch.
+# Generated from the current user-maintained review sheet on 2026-07-15.
+# Excludes all accepted records, the two isolated Le Paon retry candidates,
+# and the unresolved Le Paon issue 2/3 identity conflict.
+pub-9116e92d0ed4c9ef
+pub-9ccd07a3876d281e
+pub-156df4b2bb09819d
+pub-5e3aecfd61a349fd
+pub-387d1c56ff71ce72
+pub-88e8bf2f244adcc8
+pub-66097db8b7f9bc30
+pub-411a8f4f54950dfb
+pub-dc9b7c0333f53a0c
+pub-e4ce87d0db4c47c0
+pub-6b25fccb649cc69e
+pub-a0e4dd50de55b034
+pub-416858145465299e
+pub-197c8ab63032e959
+pub-ec7cf8c73ec9c508
+pub-be24d65df0245895
+pub-547a91fdf087ccd9
+pub-4e5ae3e85a9ad321
+pub-e1365949ac404caf
+pub-6de1e24f23991ddc
+pub-6df5de8d2929f5a2
+pub-9b7b50c9dbe072bf
+pub-1bbd58e811458128
+pub-4e1efdbb2831eaab
