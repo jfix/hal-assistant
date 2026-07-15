@@ -157,7 +157,10 @@ def test_openalex_enrichment_extracts_source() -> None:
                 "publication_year": 2024,
                 "ids": {"doi": "https://doi.org/10.1234/example"},
                 "primary_location": {
-                    "source": {"display_name": "Revue test", "issn": ["1234-5678"]}
+                    "source": {
+                        "display_name": "Revue test",
+                        "issn": ["1234-5678"],
+                    }
                 },
             }
         ]
@@ -183,7 +186,12 @@ def test_openalex_enrichment_accepts_missing_source_issn() -> None:
                 "title": "Mon article",
                 "publication_year": 2024,
                 "ids": {},
-                "primary_location": {"source": {"display_name": "Revue test", "issn": None}},
+                "primary_location": {
+                    "source": {
+                        "display_name": "Revue test",
+                        "issn": None,
+                    }
+                },
             }
         ]
     }
@@ -210,7 +218,9 @@ def test_journal_validation_uses_unique_valid_issn_authority() -> None:
             "docs": [
                 {
                     "docid": "88663",
-                    "title_s": "ReS Futurae - Revue d'études sur la science-fiction",
+                    "title_s": (
+                        "ReS Futurae - Revue d'études sur la science-fiction"
+                    ),
                     "issn_s": "2264-6949",
                     "eissn_s": "2264-6949",
                     "publisher_s": "Université de Limoges",
@@ -228,7 +238,9 @@ def test_journal_validation_uses_unique_valid_issn_authority() -> None:
     assert result.journal_id == "88663"
     assert result.journal_status == "VALID"
     assert result.journal_authority_score >= 80
-    assert result.journal == "ReS Futurae - Revue d'études sur la science-fiction"
+    assert result.journal == (
+        "ReS Futurae - Revue d'études sur la science-fiction"
+    )
     assert result.publisher == "Université de Limoges"
     assert result.issn == ["2264-6949"]
     assert result.eissn == ["2264-6949"]
