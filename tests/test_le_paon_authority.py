@@ -3,6 +3,7 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
+from hal_assistant.hal_xml import TEI_NS, build_tei
 from hal_assistant.review_cli import add_hal_document_types
 from hal_assistant.review_import import import_review_workbook
 
@@ -16,6 +17,7 @@ def _write_review_workbook(path: Path) -> None:
             "publication_id",
             "decision",
             "publication_type",
+            "document_type",
             "title",
             "year",
             "authors",
@@ -29,6 +31,7 @@ def _write_review_workbook(path: Path) -> None:
             "pub-paon-1",
             "approve",
             "journal_issue",
+            "DOUV",
             "Le Paon d’Héra 1, Orphée (1)",
             2006,
             "Florence Fix",
@@ -51,7 +54,15 @@ def test_paon_issue_uses_validated_hal_journal_authority(tmp_path: Path) -> None
     assert record["journal_id"] == "63383"
     assert record["journal_status"] == "VALID"
     assert record["issue"] == "1"
-    assert record["thematic_title"] == "Orphée (1)"
+    assert record["issue_title"] == "Orphée (1)"
+
+    root = build_tei(record, domain="shs.litt").getroot()
+    ns = {"tei": TEI_NS}
+    assert (
+        root.findtext(".//tei:biblScope[@unit='serie']", namespaces=ns)
+        == "Orphée (1)"
+    )
+    assert root.findtext(".//tei:biblScope[@unit='issue']", namespaces=ns) == "1"
 
 
 def test_journal_issue_maps_to_douv_and_keeps_journal_container(tmp_path: Path) -> None:
