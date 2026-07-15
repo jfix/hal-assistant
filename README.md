@@ -62,6 +62,17 @@ uv run hal-submit output/hal-xml --environment preprod --test --limit 3
 uv run hal-prepare-production output/hal-xml
 ```
 
+### Exact review-batch approval
+
+For an evolving review workbook, use a newline-delimited publication-ID allowlist to build one exact batch without editing every unrelated row:
+
+```bash
+uv run hal-review-import import-review HAL-publication-review.xlsx \
+  --approval-file docs/next-hal-submission-approval-2026-07-15.txt
+```
+
+In allowlist mode, only the listed publication IDs can enter `hal-ready.json`; all other unresolved rows are deferred. Records carrying a production acceptance or a production HAL identifier are always excluded, even when an old workbook decision still says `approve`. The importer fails if the allowlist contains an unknown ID or selects an already accepted record. Keep approval files immutable with the batch they authorize.
+
 Do not treat a successful preproduction test as production authorization. Production also requires `--no-test`, `--execute`, and `HAL_SWORD_CONFIRM_PRODUCTION=SUBMIT_TO_HAL`. Preserve the generated ledgers and production archive because they are the authoritative idempotency and duplicate-safety record.
 
 ### Verified title-only duplicate false positives
@@ -113,7 +124,7 @@ uv run pytest
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). The current priorities are authoritative conference metadata research, per-record handling of HAL title-only duplicate false positives, and release documentation.
+See [ROADMAP.md](ROADMAP.md). The current priorities are processing the exact READY submission queue, isolated handling of verified HAL title-only duplicate false positives, and release documentation.
 
 ## License
 
