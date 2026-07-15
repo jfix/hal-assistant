@@ -25,6 +25,20 @@ Before submission, the workflow excluded confirmed HAL records, ambiguous matche
 
 Each notice was processed independently. The three production rejections did not block the other 61 deposits.
 
+## Follow-up production batch — 2026-07-15
+
+Seven additional reviewed records were accepted in HAL production after metadata enrichment and individual duplicate resolution:
+
+- `hal-05692218` — *Un château fond de scène d’un parc. Le garde-chasse de Chambord (1821)*
+- `hal-05692220` — *Avant-propos au Pouvoir du médecin au XIXe siècle*
+- `hal-05692221` — *La Seine sanglante : flots révolutionnaires et flux mémoriel*
+- `hal-05692222` — *Les malades d’Antonio Alámo ou la maladie au pouvoir*
+- `hal-05692223` — *Corps âgés et bouches inutiles : de quelques vieillards improductifs chez Zola et Mirbeau*
+- `hal-05692224` — *Droit à la guerre et blessures désirées en temps de paix*
+- `hal-05692226` — *Le pédant et l’exaltée, impressions littéraires*
+
+This raises the confirmed production acceptances from the submission workflow from 61 to 68. The user-maintained review sheet records all seven as `accepted` and `READY`. The ignored local archive and immutable ledgers remain authoritative for payload checksums, server diagnostics and safe resume behavior.
+
 ## Quarantined production rejections
 
 HAL's title-only duplicate protection rejected three distinct journal issues titled *Le Paon d'Héra* after other issues with the same top-level title had been accepted earlier in the batch:
