@@ -206,6 +206,12 @@ def build_tei(
     imprint = ET.SubElement(monogr, _tag("imprint"))
     _text(imprint, "publisher", _first(record, "publisher"))
     _text(imprint, "biblScope", _first(record, "volume"), unit="volume")
+    _text(
+        imprint,
+        "biblScope",
+        _first(record, "issueTitle", "issue_title"),
+        unit="serie",
+    )
     _text(imprint, "biblScope", _first(record, "issue"), unit="issue")
     _text(imprint, "biblScope", _first(record, "pages"), unit="pp")
     _text(imprint, "date", year, type="datePub")

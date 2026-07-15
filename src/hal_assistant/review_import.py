@@ -152,7 +152,9 @@ def _structure_le_paon(record: dict[str, Any]) -> bool:
     record["journal_id"] = LE_PAON_HAL_JOURNAL_ID
     record["journal_status"] = "VALID"
     record["issue"] = match.group(1)
-    record["thematic_title"] = thematic.group(1).strip() if thematic else None
+    # HAL/AOfr models the thematic volume label separately from the numeric
+    # issue. The XML serializer reads ``issue_title`` as biblScope/serie.
+    record["issue_title"] = thematic.group(1).strip() if thematic else None
     return True
 
 
