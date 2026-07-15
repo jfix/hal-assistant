@@ -49,6 +49,21 @@ def add_hal_document_types(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _read_approval_ids(path: Path) -> set[str]:
+    ids: list[str] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        value = raw_line.strip()
+        if not value or value.startswith("#"):
+            continue
+        ids.append(value)
+    if not ids:
+        raise ValueError("Approval file contains no publication IDs")
+    duplicates = sorted({value for value in ids if ids.count(value) > 1})
+    if duplicates:
+        raise ValueError("Duplicate publication IDs in approval file: " + ", ".join(duplicates))
+    return set(ids)
+
+
 @app.command()
 def import_review(
     workbook: Annotated[
@@ -58,10 +73,25 @@ def import_review(
     output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path(
         "output/review-import"
     ),
+    approval_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--approval-file",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help=(
+                "Optional newline-delimited exact publication-ID allowlist. "
+                "Only listed, not-yet-accepted records are approved; all other unresolved rows "
+                "are deferred."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Validate approved workbook rows and create HAL-ready JSON."""
     try:
-        result = import_review_workbook(workbook, output_dir)
+        approval_ids = _read_approval_ids(approval_file) if approval_file else None
+        result = import_review_workbook(workbook, output_dir, approval_ids=approval_ids)
         if not result.blocked_count:
             add_hal_document_types(result.approved_path)
     except (OSError, ValueError) as exc:
@@ -70,6 +100,7 @@ def import_review(
 
     typer.echo(f"Approved: {result.approved_count}")
     typer.echo(f"Already on HAL: {result.already_on_hal_count}")
+    typer.echo(f"Deferred: {result.deferred_count}")
     typer.echo(f"Blocked: {result.blocked_count}")
     typer.echo(f"Records with warnings: {result.warning_count}")
     typer.echo(f"HAL-ready JSON: {result.approved_path}")
