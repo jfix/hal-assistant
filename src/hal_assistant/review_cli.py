@@ -12,8 +12,8 @@ app = typer.Typer(no_args_is_help=True, help="Import Florence's validated HAL re
 
 HAL_DOCUMENT_TYPES = {
     "book": "OUV",
-    "edited_book": "OUV",
-    "journal_issue": "OUV",
+    "edited_book": "DOUV",
+    "journal_issue": "DOUV",
     "book_chapter": "COUV",
     "dictionary_entry": "COUV",
     "conference_paper": "COMM",
@@ -36,6 +36,14 @@ def add_hal_document_types(path: Path) -> list[dict[str, Any]]:
                 f"{publication_type or '<blank>'}"
             )
         record["document_type"] = document_type
+        if publication_type == "journal_issue":
+            record["container_title"] = record.get("journal_title")
+        elif document_type == "COUV":
+            record["container_title"] = record.get("book_title")
+        elif document_type == "ART":
+            record["container_title"] = record.get("journal_title")
+        elif document_type == "COMM" and record.get("book_title"):
+            record["container_title"] = record.get("book_title")
 
     path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
     return records
