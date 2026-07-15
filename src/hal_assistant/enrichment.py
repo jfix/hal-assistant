@@ -278,7 +278,13 @@ def _journal_authority_candidates(
         else []
     )
     if identifiers:
-        clauses = [f'(issn_s:"{solr_phrase(value)}" OR eissn_s:"{solr_phrase(value)}")' for value in identifiers]
+        clauses = [
+            (
+                f'(issn_s:"{solr_phrase(value)}" '
+                f'OR eissn_s:"{solr_phrase(value)}")'
+            )
+            for value in identifiers
+        ]
         query = " OR ".join(clauses)
     else:
         title = publication.journal_title
