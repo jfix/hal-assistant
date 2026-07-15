@@ -55,6 +55,15 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
         "ISBN",
         "enrichment URL",
         "enrichment error",
+        "journal authority ID",
+        "journal authority status",
+        "journal authority score",
+        "eISSN",
+        "enriched volume",
+        "enriched issue",
+        "issue title",
+        "metadata sources",
+        "validation notes",
         "raw_citation",
         "source_paragraph",
     ]
@@ -62,7 +71,7 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
     for cell in sheet[1]:
         cell.font = Font(bold=True)
     sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = f"A1:AA{max(1, len(publications) + 1)}"
+    sheet.auto_filter.ref = f"A1:AJ{max(1, len(publications) + 1)}"
 
     for item in publications:
         match = item.hal_match
@@ -94,6 +103,15 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
                 "; ".join(enrichment.isbn) if enrichment else None,
                 enrichment.url if enrichment else None,
                 enrichment.error if enrichment else None,
+                enrichment.journal_id if enrichment else None,
+                enrichment.journal_status if enrichment else None,
+                enrichment.journal_authority_score if enrichment else None,
+                "; ".join(enrichment.eissn) if enrichment else None,
+                enrichment.volume if enrichment else None,
+                enrichment.issue if enrichment else None,
+                enrichment.issue_title if enrichment else None,
+                "; ".join(enrichment.metadata_sources) if enrichment else None,
+                "; ".join(enrichment.validation_notes) if enrichment else None,
                 item.raw_citation,
                 item.source_paragraph,
             ]
@@ -125,8 +143,17 @@ def export_excel(publications: list[Publication], path: str | Path) -> Path:
         "W": 24,
         "X": 42,
         "Y": 36,
-        "Z": 100,
-        "AA": 18,
+        "Z": 20,
+        "AA": 20,
+        "AB": 16,
+        "AC": 24,
+        "AD": 16,
+        "AE": 16,
+        "AF": 48,
+        "AG": 80,
+        "AH": 80,
+        "AI": 100,
+        "AJ": 18,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
