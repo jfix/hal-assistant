@@ -43,6 +43,7 @@ class ReviewImportResult:
     already_on_hal_count: int
     blocked_count: int
     warning_count: int
+    deferred_count: int = 0
 
 
 def _column_number(reference: str) -> int:
@@ -155,19 +156,32 @@ def _structure_le_paon(record: dict[str, Any]) -> bool:
     return True
 
 
-def import_review_workbook(source: str | Path, output_dir: str | Path) -> ReviewImportResult:
+def _production_acceptance(record: dict[str, Any]) -> bool:
+    status = str(record.get("production_status") or "").strip().lower()
+    hal_id = str(record.get("production_hal_id") or "").strip()
+    return status == "accepted" or bool(hal_id)
+
+
+def import_review_workbook(
+    source: str | Path,
+    output_dir: str | Path,
+    approval_ids: set[str] | None = None,
+) -> ReviewImportResult:
     records = read_publications_sheet(source)
+    exact_approval_ids = set(approval_ids) if approval_ids is not None else None
     approved: list[dict[str, Any]] = []
     report_rows: list[dict[str, Any]] = []
-    already_on_hal = blocked = warning_count = 0
+    already_on_hal = blocked = warning_count = deferred = 0
     seen_ids: set[str] = set()
 
     for record in records:
         publication_id = str(record.get("publication_id") or "").strip()
-        decision = str(record.get("decision") or "").strip()
+        workbook_decision = str(record.get("decision") or "").strip()
+        effective_decision = workbook_decision
         errors: list[str] = []
         warnings: list[str] = []
         transformations: list[str] = []
+        row_status = "valid"
 
         if not publication_id:
             errors.append("Missing publication_id")
@@ -176,10 +190,41 @@ def import_review_workbook(source: str | Path, output_dir: str | Path) -> Review
         else:
             seen_ids.add(publication_id)
 
-        if decision == "already_on_hal":
+        accepted_in_production = _production_acceptance(record)
+        explicitly_selected = (
+            exact_approval_ids is not None and publication_id in exact_approval_ids
+        )
+
+        if accepted_in_production:
+            effective_decision = "already_on_hal"
             already_on_hal += 1
-        elif decision == "approve":
+            if explicitly_selected:
+                errors.append(
+                    "Approval allowlist includes a record already accepted in production"
+                )
+            elif workbook_decision == "approve":
+                warnings.append(
+                    "Workbook still says approve, but production acceptance excludes this record"
+                )
+                transformations.append("Excluded accepted production record")
+        elif exact_approval_ids is not None:
+            if explicitly_selected:
+                effective_decision = "approve"
+                transformations.append("Approved by exact publication-ID allowlist")
+            else:
+                effective_decision = "defer"
+                row_status = "deferred"
+                deferred += 1
+        elif workbook_decision == "already_on_hal":
+            already_on_hal += 1
+        elif workbook_decision != "approve":
+            errors.append(
+                f"Unsupported or incomplete decision: {workbook_decision or '<blank>'}"
+            )
+
+        if effective_decision == "approve" and not accepted_in_production:
             normalized = dict(record)
+            normalized["decision"] = "approve"
             original_title = normalized.get("title")
             normalized["title"] = _normalize_centuries(original_title)
             if normalized["title"] != original_title:
@@ -197,23 +242,31 @@ def import_review_workbook(source: str | Path, output_dir: str | Path) -> Review
                 warnings.append("Possible HAL overlap approved as distinct")
             if not errors:
                 approved.append(normalized)
-        else:
-            errors.append(f"Unsupported or incomplete decision: {decision or '<blank>'}")
 
         if errors:
             blocked += 1
+            row_status = "blocked"
         if warnings:
             warning_count += 1
         report_rows.append(
             {
                 "publication_id": publication_id,
-                "decision": decision,
-                "status": "blocked" if errors else "valid",
+                "decision": workbook_decision,
+                "effective_decision": effective_decision,
+                "status": row_status,
                 "errors": errors,
                 "warnings": warnings,
                 "transformations": transformations,
             }
         )
+
+    if exact_approval_ids is not None:
+        unknown_ids = exact_approval_ids.difference(seen_ids)
+        if unknown_ids:
+            raise ValueError(
+                "Approval allowlist contains unknown publication IDs: "
+                + ", ".join(sorted(unknown_ids))
+            )
 
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -227,8 +280,12 @@ def import_review_workbook(source: str | Path, output_dir: str | Path) -> Review
                 "total_rows": len(records),
                 "approved": len(approved),
                 "already_on_hal": already_on_hal,
+                "deferred": deferred,
                 "blocked": blocked,
                 "records_with_warnings": warning_count,
+                "approval_allowlist": (
+                    sorted(exact_approval_ids) if exact_approval_ids is not None else None
+                ),
                 "rows": report_rows,
             },
             ensure_ascii=False,
@@ -243,4 +300,5 @@ def import_review_workbook(source: str | Path, output_dir: str | Path) -> Review
         already_on_hal,
         blocked,
         warning_count,
+        deferred,
     )
