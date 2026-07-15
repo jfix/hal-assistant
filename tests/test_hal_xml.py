@@ -48,6 +48,66 @@ def test_build_tei_contains_mandatory_hal_metadata() -> None:
     assert root.findtext(".//tei:idno[@type='doi']", namespaces=ns) == "10.1234/example"
 
 
+def test_build_tei_serializes_volume_editors_and_publisher_place() -> None:
+    record = sample_record() | {
+        "document_type": "COUV",
+        "container_title": "Corneille de circonstance",
+        "editors": "Florence Fix; Yohann Deguin",
+        "publisher": "Épure",
+        "publisher_city": "Reims",
+    }
+
+    root = build_tei(record, domain="shs.litt").getroot()
+    ns = {"tei": TEI_NS}
+
+    assert [
+        node.text for node in root.findall(".//tei:monogr/tei:editor", namespaces=ns)
+    ] == ["Florence Fix", "Yohann Deguin"]
+    assert root.findtext(".//tei:imprint/tei:publisher", namespaces=ns) == "Épure"
+    assert root.findtext(".//tei:imprint/tei:pubPlace", namespaces=ns) == "Reims"
+
+
+def test_publication_identifiers_use_aofr_container_levels() -> None:
+    record = sample_record() | {
+        "journalId": "88663",
+        "journalStatus": "VALID",
+        "isbn": "978-2-406-18678-6",
+        "issn": "1234-5678",
+        "eissn": "8765-4321",
+        "issueTitle": "Issue theme",
+    }
+    root = build_tei(record, domain="shs.litt").getroot()
+    ns = {"tei": TEI_NS}
+    bibl_struct = root.find(".//tei:biblStruct", ns)
+    assert bibl_struct is not None
+    assert bibl_struct.findtext("tei:idno[@type='doi']", namespaces=ns) == (
+        "10.1234/example"
+    )
+    assert bibl_struct.findtext(
+        "tei:monogr/tei:idno[@type='isbn']", namespaces=ns
+    ) == "978-2-406-18678-6"
+    assert bibl_struct.findtext(
+        "tei:monogr/tei:idno[@type='issn']", namespaces=ns
+    ) == "1234-5678"
+    assert bibl_struct.findtext(
+        "tei:monogr/tei:idno[@type='eissn']", namespaces=ns
+    ) == "8765-4321"
+    journal_id = bibl_struct.find("tei:monogr/tei:idno[@type='halJournalId']", ns)
+    assert journal_id is not None
+    assert journal_id.text == "88663"
+    assert journal_id.attrib["status"] == "VALID"
+    assert bibl_struct.findtext(
+        "tei:monogr/tei:imprint/tei:biblScope[@unit='serie']", namespaces=ns
+    ) == "Issue theme"
+    assert bibl_struct.find("tei:idno[@type='isbn']", ns) is None
+    monogr = bibl_struct.find("tei:monogr", ns)
+    assert monogr is not None
+    monogr_children = list(monogr)
+    assert monogr_children.index(monogr.find("tei:idno[@type='isbn']", ns)) < (
+        monogr_children.index(monogr.find("tei:title", ns))
+    )
+
+
 def test_build_tei_requires_domain() -> None:
     with pytest.raises(ValueError, match="domain"):
         build_tei(sample_record(), domain="")

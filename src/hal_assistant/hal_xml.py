@@ -55,6 +55,13 @@ def _authors(record: dict[str, Any]) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def _editors(record: dict[str, Any]) -> list[str]:
+    value = record.get("editors") or []
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(";") if item.strip()]
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
 def _first(record: dict[str, Any], *names: str) -> Any:
     for name in names:
         value = record.get(name)
@@ -150,11 +157,29 @@ def build_tei(
             ET.SubElement(author, _tag("affiliation"), {"ref": f"#struct-{resolved_structure_id}"})
 
     monogr = ET.SubElement(bibl_struct, _tag("monogr"))
+    # AOfr models publication identifiers on the containing monograph or
+    # journal and requires them before its title.
+    journal_id = _first(record, "journalId", "journal_id")
+    if journal_id:
+        _text(
+            monogr,
+            "idno",
+            journal_id,
+            type="halJournalId",
+            status=str(_first(record, "journalStatus", "journal_status") or "VALID"),
+        )
+    for isbn in _identifier_values(_first(record, "isbn")):
+        _text(monogr, "idno", isbn, type="isbn")
+    for issn in _identifier_values(_first(record, "issn")):
+        _text(monogr, "idno", issn, type="issn")
+    for eissn in _identifier_values(_first(record, "eissn")):
+        _text(monogr, "idno", eissn, type="eissn")
+
     container = _first(record, "journalOrBookTitle", "container_title", "journal")
     if container:
-        level = "m" if str(document_type) in {"OUV", "COUV"} else "j"
+        level = "m" if str(document_type) in {"OUV", "DOUV", "COUV"} else "j"
         _text(monogr, "title", container, level=level)
-    elif str(document_type) == "OUV":
+    elif str(document_type) in {"OUV", "DOUV"}:
         _text(monogr, "title", title, level="m")
 
     if str(document_type) == "COMM":
@@ -198,20 +223,24 @@ def build_tei(
 
     for doi in _identifier_values(_first(record, "doi")):
         _text(bibl_struct, "idno", doi, type="doi")
-    for isbn in _identifier_values(_first(record, "isbn")):
-        _text(monogr, "idno", isbn, type="isbn")
-    for issn in _identifier_values(_first(record, "issn")):
-        _text(monogr, "idno", issn, type="issn")
+
+    for editor_name in _editors(record):
+        _text(monogr, "editor", editor_name)
 
     imprint = ET.SubElement(monogr, _tag("imprint"))
     _text(imprint, "publisher", _first(record, "publisher"))
-    _text(imprint, "biblScope", _first(record, "volume"), unit="volume")
+    _text(
+        imprint,
+        "pubPlace",
+        _first(record, "publisher_city", "publisherCity"),
+    )
     _text(
         imprint,
         "biblScope",
         _first(record, "issueTitle", "issue_title"),
         unit="serie",
     )
+    _text(imprint, "biblScope", _first(record, "volume"), unit="volume")
     _text(imprint, "biblScope", _first(record, "issue"), unit="issue")
     _text(imprint, "biblScope", _first(record, "pages"), unit="pp")
     _text(imprint, "date", year, type="datePub")
