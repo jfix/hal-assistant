@@ -65,11 +65,20 @@ class Enrichment(BaseModel):
     source: str
     score: float = 0.0
     canonical_title: str | None = None
+    container_title: str | None = None
+    pages: str | None = None
+    work_type: str | None = None
+    suggested_publication_type: PublicationType | None = None
+    type_review_reason: str | None = None
     doi: str | None = None
     journal: str | None = None
+    volume: str | None = None
+    issue: str | None = None
+    issue_title: str | None = None
     publisher: str | None = None
     issn: list[str] = Field(default_factory=list)
     isbn: list[str] = Field(default_factory=list)
+    metadata_sources: list[str] = Field(default_factory=list)
     url: str | None = None
     error: str | None = None
 
