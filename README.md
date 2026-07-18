@@ -88,6 +88,18 @@ uv run pytest
 
 See [ROADMAP.md](ROADMAP.md). The current priorities are authoritative conference metadata research, per-record handling of HAL title-only duplicate false positives, and release documentation.
 
+## Web application handover
+
+The next product phase is documented in:
+
+- [web application handover](docs/WEB_APP_HANDOFF.md);
+- [proposed data model](docs/DATA_MODEL.md);
+- [recommended architecture](docs/WEB_APP_ARCHITECTURE.md);
+- [regression fixture plan](docs/TEST_FIXTURES.md);
+- [new-task kickoff prompt](docs/NEW_CONVERSATION_KICKOFF.md).
+
+Repository-wide safety and implementation rules are in [AGENTS.md](AGENTS.md).
+
 ## License
 
 MIT
